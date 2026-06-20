@@ -1,5 +1,6 @@
 #include "agent/command.h"
 
+#include "agent/script_runner.h"
 #include "core/math.h"
 #include "debug/debug_state.h"
 #include "scene/game_object.h"
@@ -226,8 +227,47 @@ AgentCommandResult cmdDebugDump(const std::vector<std::string>&,
                                 const AgentCommandContext& ctx)
 {
     std::string text = DebugState::build(
-        ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount, ctx.scene, ctx.selected);
+        ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount, ctx.scene, ctx.selected,
+        ctx.lastScriptPath);
     return makeSuccess(text);
+}
+
+namespace {
+
+std::filesystem::path scriptPath(const std::string& filename)
+{
+    std::filesystem::path dir = "assets/scripts";
+    std::filesystem::create_directories(dir);
+    return dir / filename;
+}
+
+} // namespace
+
+AgentCommandResult cmdScriptRun(const std::vector<std::string>& args,
+                                AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: script.run <filename>");
+    }
+
+    const std::string& filename = args[1];
+    std::filesystem::path path = scriptPath(filename);
+    if (!std::filesystem::exists(path)) {
+        return makeError("Script not found: " + path.string());
+    }
+
+    ScriptResult result = runScript(ctx, path, filename);
+    if (!result.success) {
+        return makeError(result.error);
+    }
+
+    std::ostringstream oss;
+    oss << "Executed " << result.executed << " command";
+    if (result.executed != 1) {
+        oss << "s";
+    }
+    oss << ".\n\n" << result.output;
+    return makeSuccess(oss.str());
 }
 
 AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
@@ -528,6 +568,11 @@ const std::vector<CommandEntry>& commandTable()
           "Returns a full debug state snapshot.",
           "debug.dump"},
          cmdDebugDump},
+        {{"script.run",
+          "script.run <filename>",
+          "Runs an agent command script from assets/scripts/<filename>.",
+          "script.run create_test_scene.wbs"},
+         cmdScriptRun},
     };
     return table;
 }

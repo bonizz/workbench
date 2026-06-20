@@ -1,4 +1,5 @@
 #include "agent/command.h"
+#include "agent/script_runner.h"
 #include "core/math.h"
 #include "core/object_id.h"
 #include "debug/debug_state.h"
@@ -364,6 +365,87 @@ int main()
 
         std::string text = DebugState::build(1, 60.0f, 16.66f, 2, scene, nullptr);
         assert(text.find("SceneFile: test.scene") != std::string::npos);
+    }
+
+    // Script runner: success, blank lines, comments, scene mutation.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        std::filesystem::create_directories("build/tests");
+        const char* path = "build/tests/test_script.wbs";
+        std::ofstream out(path);
+        out << "# Create a cube\n\n";
+        out << "scene.create_cube ScriptCube\n";
+        out << "transform.set_position 2 1.0 2.0 3.0\n";
+        out.close();
+
+        ScriptResult result = runScript(ctx, path, "test_script.wbs");
+        assert(result.success);
+        assert(result.executed == 2);
+        assert(scene.objects().size() == 2);
+        GameObject* cube = scene.findObjectById(2);
+        assert(cube != nullptr);
+        assert(cube->name() == "ScriptCube");
+        assert(cube->transform().position.x == 1.0f);
+        assert(cube->transform().position.y == 2.0f);
+        assert(cube->transform().position.z == 3.0f);
+        assert(ctx.lastScriptPath == "test_script.wbs");
+
+        std::filesystem::remove(path);
+    }
+
+    // Script runner: stops on first failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        const char* path = "build/tests/failing_script.wbs";
+        std::ofstream out(path);
+        out << "scene.create_cube A\n";
+        out << "scene.delete 99\n";
+        out.close();
+
+        ScriptResult result = runScript(ctx, path, "failing_script.wbs");
+        assert(!result.success);
+        assert(result.executed == 1);
+        assert(result.error.find("99") != std::string::npos);
+
+        std::filesystem::remove(path);
+    }
+
+    // script.run agent command.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        std::filesystem::create_directories("assets/scripts");
+        const char* path = "assets/scripts/agent_script.wbs";
+        std::ofstream out(path);
+        out << "scene.create_cube AgentCube\n";
+        out.close();
+
+        AgentCommandResult result = executeCommand("script.run agent_script.wbs", ctx);
+        assert(result.success);
+        assert(result.output.find("Executed 1 command") != std::string::npos);
+        assert(scene.findObjectById(2) != nullptr);
+        assert(ctx.lastScriptPath == "agent_script.wbs");
+
+        std::filesystem::remove(path);
+    }
+
+    // DebugState reports last script path.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, "repro.wbs");
+        assert(text.find("Last Script: repro.wbs") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");

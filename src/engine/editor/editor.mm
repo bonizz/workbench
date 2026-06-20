@@ -1,5 +1,6 @@
 #include "editor/editor.h"
 #include "agent/command.h"
+#include "agent/script_runner.h"
 #include "debug/debug_state.h"
 #include "scene/mesh_renderer.h"
 #include "scene/scene.h"
@@ -83,6 +84,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     drawInspector();
     drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
     drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
+    drawScriptRunner(scene);
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
@@ -203,7 +205,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Execute")) {
-        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount};
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_};
         AgentCommandResult result = executeCommand(commandBuffer_, ctx);
 
         consoleOutput_ += "> " + std::string(commandBuffer_) + "\n";
@@ -212,6 +214,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
             consoleOutput_ += "\n";
         }
         commandBuffer_[0] = '\0';
+        lastScriptPath_ = ctx.lastScriptPath;
     }
 
     ImGui::Separator();
@@ -226,6 +229,37 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::End();
 }
 
+void Editor::drawScriptRunner(Scene& scene)
+{
+    ImGui::SetNextWindowPos(ImVec2(650, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Script Runner");
+
+    ImGui::InputText("Script File", scriptBuffer_, sizeof(scriptBuffer_));
+    ImGui::SameLine();
+    if (ImGui::Button("Run Script")) {
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_};
+        AgentCommandResult result = executeCommand(std::string("script.run ") + scriptBuffer_, ctx);
+
+        scriptOutput_ = result.output;
+        if (!result.success && !result.output.empty()) {
+            scriptOutput_ += result.output;
+        }
+        lastScriptPath_ = ctx.lastScriptPath;
+    }
+
+    ImGui::Separator();
+
+    ImVec2 outputSize = ImGui::GetContentRegionAvail();
+    if (ImGui::BeginChild("##script_output", outputSize, false, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::TextUnformatted(scriptOutput_.data(),
+                               scriptOutput_.data() + scriptOutput_.size());
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
+}
+
 void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 490), ImGuiCond_FirstUseEver);
@@ -233,12 +267,12 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     ImGui::Begin("Diagnostics");
 
     if (ImGui::Button("Write Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_);
         DebugState::writeToFile(text);
     }
 
     if (ImGui::Button("Copy Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_);
         ImGui::SetClipboardText(text.c_str());
     }
 

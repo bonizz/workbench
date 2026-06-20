@@ -15,7 +15,8 @@ std::string build(uint64_t frame,
                   float frameTimeMs,
                   size_t renderCommandCount,
                   const Scene& scene,
-                  const GameObject* selected);
+                  const GameObject* selected,
+                  const std::string& lastScriptPath = {});
 
 // Writes text to logs/latest_state.txt, creating logs/ if needed.
 void writeToFile(const std::string& text, const std::string& path = "logs/latest_state.txt");

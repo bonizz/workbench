@@ -54,7 +54,8 @@ std::string build(uint64_t frame,
                   float frameTimeMs,
                   size_t renderCommandCount,
                   const Scene& scene,
-                  const GameObject* selected)
+                  const GameObject* selected,
+                  const std::string& lastScriptPath)
 {
     std::ostringstream out;
     out << std::fixed << std::setprecision(1);
@@ -65,6 +66,9 @@ std::string build(uint64_t frame,
     out << "FrameTime: " << frameTimeMs << " ms\n";
     if (!scene.loadedScenePath().empty()) {
         out << "SceneFile: " << scene.loadedScenePath() << "\n";
+    }
+    if (!lastScriptPath.empty()) {
+        out << "Last Script: " << lastScriptPath << "\n";
     }
     out << "\n";
 

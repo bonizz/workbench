@@ -67,6 +67,8 @@ project "tests"
         "src/tests/main.cpp",
         "src/engine/agent/command.cpp",
         "src/engine/agent/command.h",
+        "src/engine/agent/script_runner.cpp",
+        "src/engine/agent/script_runner.h",
         "src/engine/core/math.cpp",
         "src/engine/core/math.h",
         "src/engine/core/object_id.h",

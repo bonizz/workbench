@@ -50,6 +50,7 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `transform.get <id>` | Show position, rotation, and scale of an object. |
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
+| `script.run <filename>` | Execute agent commands from `assets/scripts/<filename>`. |
 
 ## Command Discovery
 

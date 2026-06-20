@@ -1,0 +1,9 @@
+# Create a simple test scene with two cubes.
+
+scene.create_cube CubeA
+transform.set_position 2 1.0 0.0 0.0
+
+scene.create_cube CubeB
+transform.set_position 3 -1.0 0.0 0.0
+
+scene.save sample.scene

@@ -31,10 +31,14 @@ private:
     void drawInspector();
     void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene);
     void drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
+    void drawScriptRunner(Scene& scene);
 
     bool initialized_ = false;
     GameObject* selected_ = nullptr;
     char nameBuffer_[128] = {};
     char commandBuffer_[256] = {};
     std::string consoleOutput_;
+    char scriptBuffer_[128] = {};
+    std::string scriptOutput_;
+    std::string lastScriptPath_;
 };

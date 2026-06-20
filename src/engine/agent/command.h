@@ -18,6 +18,9 @@ struct AgentCommandContext
     float fps = 0.0f;
     float frameTimeMs = 0.0f;
     size_t renderCommandCount = 0;
+
+    // Updated by script.run so debug.dump can report it.
+    std::string lastScriptPath;
 };
 
 struct AgentCommandResult
