@@ -90,9 +90,10 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
     for (const auto& obj : scene.objects()) {
         ImGui::PushID(obj.get());
         bool isSelected = (selected_ == obj.get());
-        if (ImGui::Selectable(obj->name().c_str(), isSelected)) {
+        const std::string& name = obj->name();
+        if (ImGui::Selectable(name.c_str(), isSelected)) {
             selected_ = obj.get();
-            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", name.c_str());
         }
         ImGui::PopID();
     }
