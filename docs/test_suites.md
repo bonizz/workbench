@@ -10,15 +10,19 @@ Place test scripts in:
 assets/tests/
 ```
 
-Each file must end with `.wbs`. Example:
+Each file must end with `.wbs`. Only files directly inside `assets/tests/` are executed; subdirectories are ignored. Example:
 
 ```text
 assets/tests/
-├── create_cube.wbs
-├── duplicate_object.wbs
 ├── components.wbs
-└── missing_object.wbs
+├── create_cube.wbs
+└── duplicate_object.wbs
+
+assets/tests/examples/
+└── missing_object_fail.wbs
 ```
+
+The `examples/` subdirectory holds sample scripts (including intentionally failing ones) without affecting the default suite run.
 
 ## Running tests
 
@@ -35,12 +39,10 @@ From the CLI:
 PASS components
 PASS create_cube
 PASS duplicate_object
-FAIL missing_object
-      Object not found: MissingCube
 
 Summary:
 Passed: 3
-Failed: 1
+Failed: 0
 ```
 
 Exit codes:
@@ -69,7 +71,7 @@ Currently this directory contains only `state.txt`, written synchronously. Scree
 Example:
 
 ```text
-bundles/test_failures/missing_object/
+bundles/test_failures/missing_object_fail/
 └── state.txt
 ```
 
