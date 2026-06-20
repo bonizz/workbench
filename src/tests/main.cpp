@@ -1,6 +1,7 @@
 #include "agent/command.h"
 #include "agent/script_runner.h"
 #include "capture/capture.h"
+#include "core/cli_options.h"
 #include "core/math.h"
 #include "core/object_id.h"
 #include "debug/bundle.h"
@@ -578,6 +579,34 @@ int main()
         scene.createCamera({0.0f, 1.0f, 2.0f});
         std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, {}, {}, "bundles/repro/");
         assert(text.find("Last Bundle: bundles/repro/") != std::string::npos);
+    }
+
+    // CLI option parsing.
+    {
+        const char* args[] = {"sandbox", "--run-script", "create_test_scene.wbs", "--bundle", "cli_smoke", "--exit", "--frames", "5"};
+        CliOptions opts = parseCliOptions(8, args);
+        assert(opts.runScript == "create_test_scene.wbs");
+        assert(opts.bundleName == "cli_smoke");
+        assert(opts.autoExit);
+        assert(opts.extraFrames == 5);
+    }
+
+    // CLI defaults.
+    {
+        const char* args[] = {"sandbox"};
+        CliOptions opts = parseCliOptions(1, args);
+        assert(opts.runScript.empty());
+        assert(opts.bundleName.empty());
+        assert(!opts.autoExit);
+        assert(opts.extraFrames == 3);
+    }
+
+    // CLI missing arguments.
+    {
+        const char* args[] = {"sandbox", "--run-script", "--bundle", "name"};
+        CliOptions opts = parseCliOptions(4, args);
+        assert(opts.runScript.empty());
+        assert(opts.bundleName == "name");
     }
 
     std::printf("All tests passed.\n");

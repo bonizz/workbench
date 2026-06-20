@@ -242,6 +242,11 @@ void handleTerminationSignal(int)
 
 } // namespace
 
+void Window::terminate()
+{
+    [NSApp terminate:nil];
+}
+
 void Window::run()
 {
     NSApplication* app = [NSApplication sharedApplication];

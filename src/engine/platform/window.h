@@ -12,6 +12,7 @@ public:
     Window& operator=(const Window&) = delete;
 
     void run();
+    void terminate();
 
     void* nativeView() const;
     void* metalLayer() const;

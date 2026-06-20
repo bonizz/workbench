@@ -74,6 +74,8 @@ project "tests"
         "src/engine/agent/script_runner.h",
         "src/engine/capture/capture.h",
         "src/engine/capture/capture.mm",
+        "src/engine/core/cli_options.cpp",
+        "src/engine/core/cli_options.h",
         "src/engine/core/math.cpp",
         "src/engine/core/math.h",
         "src/engine/core/object_id.h",

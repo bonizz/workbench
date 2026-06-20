@@ -1,4 +1,5 @@
 #include "core/application.h"
+#include "agent/command.h"
 #include "core/math.h"
 #include "platform/window.h"
 #include "renderer/metal_renderer.h"
@@ -12,7 +13,11 @@ using scene::MeshRenderer;
 
 #include "imgui/imgui.h"
 
+#include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <thread>
 
 Application::Application()
 {
@@ -55,6 +60,11 @@ void Application::run()
     window_->run();
 }
 
+void Application::setCliOptions(const CliOptions& options)
+{
+    cliOptions_ = options;
+}
+
 void Application::shutdown()
 {
     editor_.reset();
@@ -70,6 +80,51 @@ void Application::onResize(float width, float height, float scale)
     }
     if (scene_) {
         scene_->camera().setAspect(renderer_ ? renderer_->aspectRatio() : (width / height));
+    }
+}
+
+void Application::waitForPendingScreenshot()
+{
+    if (pendingScreenshotPath_.empty()) {
+        return;
+    }
+
+    using namespace std::chrono;
+    auto start = steady_clock::now();
+    while (!std::filesystem::exists(pendingScreenshotPath_)) {
+        auto elapsed = duration_cast<seconds>(steady_clock::now() - start).count();
+        if (elapsed > 5) {
+            std::fprintf(stderr, "Timed out waiting for screenshot: %s\n", pendingScreenshotPath_.c_str());
+            break;
+        }
+        std::this_thread::sleep_for(50ms);
+    }
+}
+
+void Application::runAutomation()
+{
+    GameObject* selected = nullptr;
+    AgentCommandContext ctx{*scene_, selected, frame_, fps_, frameTimeMs_,
+                            lastRenderCommandCount_, {}, renderer_.get()};
+
+    if (!cliOptions_.runScript.empty()) {
+        std::string command = "script.run " + cliOptions_.runScript;
+        AgentCommandResult result = executeCommand(command, ctx);
+        std::printf("%s\n", result.output.c_str());
+        if (!result.success) {
+            std::fprintf(stderr, "Automation failed: %s\n", result.output.c_str());
+        }
+    }
+
+    if (!cliOptions_.bundleName.empty()) {
+        std::string command = "debug.bundle " + cliOptions_.bundleName;
+        AgentCommandResult result = executeCommand(command, ctx);
+        std::printf("%s\n", result.output.c_str());
+        if (!result.success) {
+            std::fprintf(stderr, "Automation failed: %s\n", result.output.c_str());
+        } else {
+            pendingScreenshotPath_ = ctx.lastCapturePath;
+        }
     }
 }
 
@@ -95,6 +150,34 @@ void Application::onUpdate(float deltaTime)
     if (deltaTime > 0.0f) {
         fps_ = 1.0f / deltaTime;
         frameTimeMs_ = deltaTime * 1000.0f;
+    }
+
+    switch (automationState_) {
+        case AutomationState::Pending: {
+            bool hasWork = !cliOptions_.runScript.empty() || !cliOptions_.bundleName.empty();
+            if (hasWork) {
+                runAutomation();
+            }
+
+            if (hasWork && cliOptions_.autoExit) {
+                automationWaitFrames_ = std::max(0, cliOptions_.extraFrames);
+                automationState_ = AutomationState::WaitingExtraFrames;
+            } else {
+                automationState_ = AutomationState::Done;
+            }
+            break;
+        }
+        case AutomationState::WaitingExtraFrames:
+            if (--automationWaitFrames_ <= 0) {
+                automationState_ = AutomationState::Done;
+                waitForPendingScreenshot();
+                if (window_) {
+                    window_->terminate();
+                }
+            }
+            break;
+        default:
+            break;
     }
 }
 

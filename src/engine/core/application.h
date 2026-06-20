@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/cli_options.h"
 #include "core/input_state.h"
 #include "core/time.h"
 #include "scene/camera.h"
@@ -13,6 +14,14 @@ class MetalRenderer;
 class Editor;
 class Scene;
 
+enum class AutomationState
+{
+    Pending,
+    RanCommands,
+    WaitingExtraFrames,
+    Done
+};
+
 class Application
 {
 public:
@@ -22,6 +31,8 @@ public:
     bool init();
     void run();
     void shutdown();
+
+    void setCliOptions(const CliOptions& options);
 
     // Called by the platform window each frame.
     void onUpdate(float deltaTime);
@@ -37,6 +48,9 @@ public:
     void onScroll(float delta);
 
 private:
+    void runAutomation();
+    void waitForPendingScreenshot();
+
     std::unique_ptr<Window> window_;
     std::unique_ptr<MetalRenderer> renderer_;
     std::unique_ptr<Editor> editor_;
@@ -60,4 +74,9 @@ private:
 
     uint64_t frame_ = 0;
     size_t lastRenderCommandCount_ = 0;
+
+    CliOptions cliOptions_;
+    AutomationState automationState_ = AutomationState::Pending;
+    int automationWaitFrames_ = 0;
+    std::string pendingScreenshotPath_;
 };
