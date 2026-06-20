@@ -6,6 +6,8 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <cstdlib>
+#include <csignal>
 #include <cmath>
 
 @interface WorkbenchView : NSView
@@ -214,6 +216,15 @@ Window::~Window()
     delete impl_;
 }
 
+namespace {
+
+void handleTerminationSignal(int)
+{
+    std::exit(0);
+}
+
+} // namespace
+
 void Window::run()
 {
     NSApplication* app = [NSApplication sharedApplication];
@@ -235,6 +246,12 @@ void Window::run()
 
     app.activationPolicy = NSApplicationActivationPolicyRegular;
     app.delegate = delegate;
+
+    // NSApplication ignores SIGTERM by default. Handle SIGTERM/SIGINT so
+    // scripts and manual `kill` terminate the app without leaving it running.
+    std::signal(SIGTERM, handleTerminationSignal);
+    std::signal(SIGINT, handleTerminationSignal);
+
     [app run];
 
     [delegate release];
