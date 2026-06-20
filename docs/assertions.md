@@ -10,6 +10,10 @@ Assertions let agents express expectations about scene state inside scripts. The
 | `assert.object_exists <name>` | A GameObject with the given name exists. |
 | `assert.selected [name]` | An object is selected; with a name, the selected object must match. |
 | `assert.has_component <name> <component_type>` | The named object has the given component. |
+| `assert.rotation <name> <x> <y> <z> [tolerance]` | The named object's Euler rotation (degrees) matches. |
+| `assert.position <name> <x> <y> <z> [tolerance]` | The named object's position matches. |
+| `assert.scale <name> <x> <y> <z> [tolerance]` | The named object's scale matches. |
+| `assert.color <name> <r> <g> <b> <a> [tolerance]` | The named object's MeshRenderer color matches. |
 
 ## Success and failure
 
@@ -33,6 +37,42 @@ Object not found: CubeA
 ```
 
 Assertion failures set `Last Assertion Failure` in `DebugState` so it persists across commands and frames.
+
+## Numeric assertions
+
+`assert.rotation`, `assert.position`, `assert.scale`, and `assert.color` compare
+numeric values component-by-component. Each component must be within the tolerance:
+
+```text
+|actual - expected| <= tolerance
+```
+
+The default tolerance is `0.01`. An optional final argument overrides it:
+
+```text
+assert.position Cube 0 0.5 0
+assert.position Cube 0 0.5 0 0.001
+```
+
+`assert.color` requires a `MeshRenderer`. If the object exists but has no
+`MeshRenderer`, it is an assertion failure (not a usage error):
+
+```text
+Object 'Cube' has no MeshRenderer component.
+```
+
+A passing numeric assertion returns:
+
+```text
+OK
+```
+
+A failing one returns Expected / Actual text:
+
+```text
+Expected position: 0.0000, 0.0000, 0.0000
+Actual position:   0.0000, 0.5000, 0.0000
+```
 
 ## Script as integration test
 
@@ -85,4 +125,5 @@ Object not found: MissingCube
 
 - No boolean logic, variables, loops, or JSON expressions.
 - `assert.object_exists` matches the first object with the given name.
+- Numeric assertions use object names, not `ObjectIds`, so they are stable across loads.
 - Component types are compared by `Component::typeName()`; only `MeshRenderer` is defined today.

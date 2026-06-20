@@ -971,6 +971,115 @@ int main()
         assert(result.output.find("Object not found: Nope") != std::string::npos);
     }
 
+    // assert.position success and failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Cube");
+        obj->transform().position = {1.0f, 2.0f, 3.0f};
+
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.position Cube 1 2 3", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Failure within default tolerance.
+        lastFailure.clear();
+        result = executeCommand("assert.position Cube 1 2 3.5", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected position: 1.0000, 2.0000, 3.5000") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Loose tolerance passes.
+        result = executeCommand("assert.position Cube 1 2 3.4 1.0", ctx);
+        assert(result.success);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.position Nope 0 0 0", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+    }
+
+    // assert.scale success and failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Cube");
+        obj->transform().scale = {2.0f, 4.0f, 6.0f};
+
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.scale Cube 2 4 6", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Failure within default tolerance.
+        lastFailure.clear();
+        result = executeCommand("assert.scale Cube 2 4 6.5", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected scale: 2.0000, 4.0000, 6.5000") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Loose tolerance passes.
+        result = executeCommand("assert.scale Cube 2 4 6.4 1.0", ctx);
+        assert(result.success);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.scale Nope 1 1 1", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+    }
+
+    // assert.color success, failure, and missing MeshRenderer.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Cube");
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+        obj->addComponent(std::move(mesh));
+
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.color Cube 0.95 0.55 0.20 1.0", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Failure within default tolerance.
+        lastFailure.clear();
+        result = executeCommand("assert.color Cube 0.95 0.55 0.20 0.5", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected color: 0.9500, 0.5500, 0.2000, 0.5000") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Loose tolerance passes.
+        result = executeCommand("assert.color Cube 0.95 0.55 0.20 0.6 0.5", ctx);
+        assert(result.success);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.color Nope 1 1 1 1", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+
+        // Existing object without a MeshRenderer is an assertion failure.
+        scene.createObject("Bare");
+        lastFailure.clear();
+        result = executeCommand("assert.color Bare 1 1 1 1", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object 'Bare' has no MeshRenderer component.") != std::string::npos);
+        assert(lastFailure == result.output);
+    }
+
     // RotateComponent serialization round-trip.
     {
         Scene scene;
@@ -1028,6 +1137,9 @@ int main()
         assert(result.output.find("component.set_rotator") != std::string::npos);
         assert(result.output.find("sim.step") != std::string::npos);
         assert(result.output.find("assert.rotation") != std::string::npos);
+        assert(result.output.find("assert.position") != std::string::npos);
+        assert(result.output.find("assert.scale") != std::string::npos);
+        assert(result.output.find("assert.color") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");

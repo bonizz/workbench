@@ -1,0 +1,2 @@
+scene.create_cube Cube
+assert.scale Cube 1 1 1

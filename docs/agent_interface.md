@@ -70,6 +70,9 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `assert.selected [name]` | Assert an object is selected (optionally matching a name). |
 | `assert.has_component <name> <type>` | Assert a GameObject has a component. |
 | `assert.rotation <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's Euler rotation in degrees (default tolerance 0.01). |
+| `assert.position <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's position (default tolerance 0.01). |
+| `assert.scale <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's scale (default tolerance 0.01). |
+| `assert.color <name> <r> <g> <b> <a> [tolerance]` | Assert a named GameObject's MeshRenderer color rgba (default tolerance 0.01). |
 
 ## Command Discovery
 

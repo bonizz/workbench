@@ -1,0 +1,2 @@
+scene.create_cube Cube
+assert.position Cube 0 0.5 0

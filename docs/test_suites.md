@@ -101,6 +101,15 @@ assert.rotation Spinner 0 90 0
 
 `assert.rotation <name> <x> <y> <z> [tolerance]` compares a named object's Euler rotation in degrees, with a default tolerance of `0.01`. An optional fifth argument overrides the tolerance.
 
+The companion numeric assertions follow the same shape and tolerance rules:
+
+- `assert.position <name> <x> <y> <z> [tolerance]`
+- `assert.scale <name> <x> <y> <z> [tolerance]`
+- `assert.color <name> <r> <g> <b> <a> [tolerance]`
+
+`assert.color` requires a `MeshRenderer`; an object without one is an assertion
+failure with the message `Object '<name>' has no MeshRenderer component.`
+
 The newer rotator and simulation commands are **name-based** so tests do not depend on runtime `ObjectIds`, which are reassigned on load and differ across runs.
 
 ### Failure-path tests
