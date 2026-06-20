@@ -1,0 +1,11 @@
+.DS_Store
+.cache/
+.ninja_deps
+.ninja_log
+*.ninja
+build/
+bin/
+obj/
+*.d
+compile_commands.json
+imgui.ini

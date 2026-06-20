@@ -1,0 +1,353 @@
+#include "renderer/metal_renderer.h"
+#include "renderer/render_types.h"
+
+#import <Cocoa/Cocoa.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+
+#include <cmath>
+#include <utility>
+
+struct MetalRenderer::Impl
+{
+    CAMetalLayer* layer = nil;
+    id<MTLDevice> device = nil;
+    id<MTLCommandQueue> commandQueue = nil;
+    id<MTLRenderPipelineState> cubePipeline = nil;
+    id<MTLRenderPipelineState> gridPipeline = nil;
+    id<MTLDepthStencilState> depthStencilState = nil;
+    id<MTLTexture> sceneColorTexture = nil;
+    id<MTLTexture> depthTexture = nil;
+    id<MTLBuffer> cubeIndexBuffer = nil;
+    id<MTLBuffer> groundVertexBuffer = nil;
+    id<MTLBuffer> groundIndexBuffer = nil;
+    id<MTLBuffer> dynamicVertexBuffer = nil;
+    NSUInteger dynamicVertexOffset = 0;
+    static constexpr NSUInteger DYNAMIC_VERTEX_CAPACITY = 512;
+    float aspectRatio = 1.0f;
+};
+
+static id<MTLRenderPipelineState> loadPipeline(id<MTLDevice> device,
+                                               const char* shaderPath,
+                                               const char* vertexFunction,
+                                               const char* fragmentFunction,
+                                               MTLPixelFormat colorFormat,
+                                               MTLPixelFormat depthFormat,
+                                               bool blend)
+{
+    NSError* error = nil;
+    NSString* path = [NSString stringWithUTF8String:shaderPath];
+    NSString* source = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
+    if (!source) {
+        NSLog(@"Failed to load shader %s: %@", shaderPath, error);
+        return nil;
+    }
+
+    id<MTLLibrary> library = [device newLibraryWithSource:source options:nil error:&error];
+    if (!library) {
+        NSLog(@"Failed to compile shader %s: %@", shaderPath, error);
+        return nil;
+    }
+
+    id<MTLFunction> vert = [library newFunctionWithName:[NSString stringWithUTF8String:vertexFunction]];
+    id<MTLFunction> frag = [library newFunctionWithName:[NSString stringWithUTF8String:fragmentFunction]];
+    if (!vert || !frag) {
+        NSLog(@"Missing shader function in %s", shaderPath);
+        [vert release];
+        [frag release];
+        [library release];
+        return nil;
+    }
+
+    MTLRenderPipelineDescriptor* desc = [[MTLRenderPipelineDescriptor alloc] init];
+    desc.vertexFunction = vert;
+    desc.fragmentFunction = frag;
+    desc.rasterSampleCount = 1;
+    desc.colorAttachments[0].pixelFormat = colorFormat;
+    if (blend) {
+        desc.colorAttachments[0].blendingEnabled = YES;
+        desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+        desc.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+        desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    }
+    if (depthFormat != MTLPixelFormatInvalid) {
+        desc.depthAttachmentPixelFormat = depthFormat;
+    }
+
+    id<MTLRenderPipelineState> pipeline = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    if (!pipeline) {
+        NSLog(@"Failed to create pipeline for %s: %@", shaderPath, error);
+    }
+
+    [desc release];
+    [vert release];
+    [frag release];
+    [library release];
+    return pipeline;
+}
+
+MetalRenderer::MetalRenderer(void* nativeMetalLayer)
+    : impl_(new Impl())
+{
+    impl_->device = [MTLCreateSystemDefaultDevice() retain];
+    if (!impl_->device) {
+        NSLog(@"No Metal device found");
+        return;
+    }
+
+    impl_->commandQueue = [impl_->device newCommandQueue];
+    impl_->layer = [(CAMetalLayer*)nativeMetalLayer retain];
+    impl_->layer.device = impl_->device;
+    impl_->layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    impl_->layer.framebufferOnly = NO;
+
+    impl_->cubePipeline = loadPipeline(impl_->device,
+                                       "assets/shaders/basic.metal",
+                                       "vertex_main",
+                                       "fragment_main",
+                                       MTLPixelFormatBGRA8Unorm,
+                                       MTLPixelFormatDepth32Float,
+                                       false);
+
+    impl_->gridPipeline = loadPipeline(impl_->device,
+                                       "assets/shaders/grid.metal",
+                                       "grid_vertex",
+                                       "grid_fragment",
+                                       MTLPixelFormatBGRA8Unorm,
+                                       MTLPixelFormatDepth32Float,
+                                       true);
+
+    MTLDepthStencilDescriptor* depthDesc = [[MTLDepthStencilDescriptor alloc] init];
+    depthDesc.depthCompareFunction = MTLCompareFunctionGreater;
+    depthDesc.depthWriteEnabled = YES;
+    impl_->depthStencilState = [impl_->device newDepthStencilStateWithDescriptor:depthDesc];
+    [depthDesc release];
+}
+
+MetalRenderer::~MetalRenderer()
+{
+    [impl_->dynamicVertexBuffer release];
+    [impl_->groundIndexBuffer release];
+    [impl_->groundVertexBuffer release];
+    [impl_->cubeIndexBuffer release];
+    [impl_->sceneColorTexture release];
+    [impl_->depthTexture release];
+    [impl_->depthStencilState release];
+    [impl_->gridPipeline release];
+    [impl_->cubePipeline release];
+    [impl_->commandQueue release];
+    [impl_->device release];
+    [impl_->layer release];
+    delete impl_;
+}
+
+void MetalRenderer::resize(float width, float height, float scale)
+{
+    CGSize drawableSize = CGSizeMake(width * scale, height * scale);
+    impl_->layer.drawableSize = drawableSize;
+    impl_->aspectRatio = (height > 0.0f) ? (width / height) : 1.0f;
+
+    MTLTextureDescriptor* colorDesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                                                            width:(NSUInteger)drawableSize.width
+                                                                                           height:(NSUInteger)drawableSize.height
+                                                                                        mipmapped:NO];
+    colorDesc.sampleCount = 1;
+    colorDesc.storageMode = MTLStorageModePrivate;
+    colorDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    [impl_->sceneColorTexture release];
+    impl_->sceneColorTexture = [impl_->device newTextureWithDescriptor:colorDesc];
+
+    MTLTextureDescriptor* depthDesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                                                            width:(NSUInteger)drawableSize.width
+                                                                                           height:(NSUInteger)drawableSize.height
+                                                                                        mipmapped:NO];
+    depthDesc.sampleCount = 1;
+    depthDesc.storageMode = MTLStorageModePrivate;
+    depthDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    [impl_->depthTexture release];
+    impl_->depthTexture = [impl_->device newTextureWithDescriptor:depthDesc];
+}
+
+float MetalRenderer::aspectRatio() const
+{
+    return impl_->aspectRatio;
+}
+
+void* MetalRenderer::device() const
+{
+    return (void*)impl_->device;
+}
+
+void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], const UIRenderCallback& uiCallback)
+{
+    if (!impl_->device || !impl_->commandQueue || !impl_->cubePipeline) {
+        return;
+    }
+
+    constexpr int CubeIndexCount = 36;
+
+    if (!impl_->sceneColorTexture) {
+        CGSize size = impl_->layer.drawableSize;
+        MTLTextureDescriptor* colorDesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                                                                width:(NSUInteger)size.width
+                                                                                               height:(NSUInteger)size.height
+                                                                                            mipmapped:NO];
+        colorDesc.storageMode = MTLStorageModePrivate;
+        colorDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+        impl_->sceneColorTexture = [impl_->device newTextureWithDescriptor:colorDesc];
+    }
+
+    if (!impl_->cubeIndexBuffer) {
+        NSUInteger len = sizeof(uint16_t) * CubeIndexCount;
+        impl_->cubeIndexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
+        uint16_t indices[CubeIndexCount] = {
+            0, 1, 2,   0, 2, 3,
+            4, 6, 5,   4, 7, 6,
+            3, 2, 6,   3, 6, 7,
+            0, 4, 5,   0, 5, 1,
+            1, 5, 6,   1, 6, 2,
+            0, 3, 7,   0, 7, 4
+        };
+        memcpy([impl_->cubeIndexBuffer contents], indices, len);
+    }
+
+    if (!impl_->groundVertexBuffer) {
+        NSUInteger len = sizeof(Vertex) * 4;
+        impl_->groundVertexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
+        Vertex* v = static_cast<Vertex*>([impl_->groundVertexBuffer contents]);
+        float sz = 50.0f;
+        v[0] = {{-sz, 0.0f, -sz}, {0, 0, 0, 0}};
+        v[1] = {{ sz, 0.0f, -sz}, {0, 0, 0, 0}};
+        v[2] = {{ sz, 0.0f,  sz}, {0, 0, 0, 0}};
+        v[3] = {{-sz, 0.0f,  sz}, {0, 0, 0, 0}};
+    }
+
+    if (!impl_->groundIndexBuffer) {
+        NSUInteger len = sizeof(uint16_t) * 6;
+        impl_->groundIndexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
+        uint16_t indices[6] = {0, 1, 2, 0, 2, 3};
+        memcpy([impl_->groundIndexBuffer contents], indices, len);
+    }
+
+    if (!impl_->dynamicVertexBuffer) {
+        NSUInteger len = sizeof(Vertex) * Impl::DYNAMIC_VERTEX_CAPACITY;
+        impl_->dynamicVertexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
+    }
+
+    id<CAMetalDrawable> drawable = [impl_->layer nextDrawable];
+    if (!drawable) {
+        return;
+    }
+
+    id<MTLCommandBuffer> commandBuffer = [impl_->commandQueue commandBuffer];
+
+    // Scene pass: render 3D content to offscreen color + depth.
+    MTLRenderPassDescriptor* scenePass = [MTLRenderPassDescriptor renderPassDescriptor];
+    scenePass.defaultRasterSampleCount = 1;
+    scenePass.colorAttachments[0].texture = impl_->sceneColorTexture;
+    scenePass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    scenePass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    scenePass.colorAttachments[0].clearColor = MTLClearColorMake(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+    scenePass.depthAttachment.texture = impl_->depthTexture;
+    scenePass.depthAttachment.loadAction = MTLLoadActionClear;
+    scenePass.depthAttachment.storeAction = MTLStoreActionStore;
+    scenePass.depthAttachment.clearDepth = 0.0;
+
+    id<MTLRenderCommandEncoder> sceneEncoder = [commandBuffer renderCommandEncoderWithDescriptor:scenePass];
+    [sceneEncoder setDepthStencilState:impl_->depthStencilState];
+
+    Mat4 view = rc.view();
+    Mat4 projection = rc.projection();
+    impl_->dynamicVertexOffset = 0;
+
+    auto allocateDynamicVerts = [&](NSUInteger count) -> std::pair<Vertex*, NSUInteger> {
+        Vertex* base = static_cast<Vertex*>([impl_->dynamicVertexBuffer contents]);
+        NSUInteger offset = impl_->dynamicVertexOffset;
+        if (offset + count > Impl::DYNAMIC_VERTEX_CAPACITY) {
+            NSLog(@"Dynamic vertex buffer overflow");
+            return {nullptr, 0};
+        }
+        impl_->dynamicVertexOffset += count;
+        return {base + offset, offset * sizeof(Vertex)};
+    };
+
+    for (const auto& cmd : rc.commands()) {
+        switch (cmd.type) {
+            case ShapeType::Cube: {
+                auto [verts, byteOffset] = allocateDynamicVerts(8);
+                if (!verts) break;
+                static const float positions[8][3] = {
+                    {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
+                    {-1,-1, 1}, {1,-1, 1}, {1,1, 1}, {-1,1, 1}
+                };
+                for (int i = 0; i < 8; ++i) {
+                    verts[i] = {{positions[i][0], positions[i][1], positions[i][2]},
+                                {cmd.color.x, cmd.color.y, cmd.color.z, cmd.color.w}};
+                }
+                [sceneEncoder setRenderPipelineState:impl_->cubePipeline];
+                [sceneEncoder setVertexBuffer:impl_->dynamicVertexBuffer offset:byteOffset
+                    atIndex:static_cast<NSUInteger>(VertexBufferIndex::Vertices)];
+                ShaderUniforms uniforms = {cmd.transform, view, projection};
+                [sceneEncoder setVertexBytes:&uniforms length:sizeof(uniforms)
+                    atIndex:static_cast<NSUInteger>(VertexBufferIndex::Uniforms)];
+                [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                    indexCount:CubeIndexCount indexType:MTLIndexTypeUInt16
+                    indexBuffer:impl_->cubeIndexBuffer indexBufferOffset:0];
+                break;
+            }
+            case ShapeType::Ground: {
+                if (!impl_->gridPipeline) break;
+                [sceneEncoder setRenderPipelineState:impl_->gridPipeline];
+                [sceneEncoder setVertexBuffer:impl_->groundVertexBuffer offset:0
+                    atIndex:static_cast<NSUInteger>(VertexBufferIndex::Vertices)];
+                ShaderUniforms gridUniforms = {cmd.transform, view, projection};
+                [sceneEncoder setVertexBytes:&gridUniforms length:sizeof(gridUniforms)
+                    atIndex:static_cast<NSUInteger>(VertexBufferIndex::Uniforms)];
+                [sceneEncoder setFragmentBytes:&cmd.gridScale length:sizeof(cmd.gridScale)
+                    atIndex:static_cast<NSUInteger>(FragmentBufferIndex::GridScale)];
+                [sceneEncoder setFragmentBytes:&cmd.gridMajorDiv length:sizeof(cmd.gridMajorDiv)
+                    atIndex:static_cast<NSUInteger>(FragmentBufferIndex::GridMajorDiv)];
+                simd::float3 camSimd = {cmd.cameraPos[0], cmd.cameraPos[1], cmd.cameraPos[2]};
+                [sceneEncoder setFragmentBytes:&camSimd length:sizeof(camSimd)
+                    atIndex:static_cast<NSUInteger>(FragmentBufferIndex::CameraPos)];
+                [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                    indexCount:6 indexType:MTLIndexTypeUInt16
+                    indexBuffer:impl_->groundIndexBuffer indexBufferOffset:0];
+                break;
+            }
+        }
+    }
+
+    [sceneEncoder endEncoding];
+
+    // Blit offscreen scene color to the window drawable.
+    id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];
+    MTLSize copySize = MTLSizeMake(impl_->sceneColorTexture.width, impl_->sceneColorTexture.height, 1);
+    [blitEncoder copyFromTexture:impl_->sceneColorTexture
+                     sourceSlice:0
+                     sourceLevel:0
+                    sourceOrigin:MTLOriginMake(0, 0, 0)
+                      sourceSize:copySize
+                       toTexture:drawable.texture
+                destinationSlice:0
+                destinationLevel:0
+               destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blitEncoder endEncoding];
+
+    // UI pass: render ImGui on top of the drawable.
+    if (uiCallback) {
+        MTLRenderPassDescriptor* uiPass = [MTLRenderPassDescriptor renderPassDescriptor];
+        uiPass.defaultRasterSampleCount = 1;
+        uiPass.colorAttachments[0].texture = drawable.texture;
+        uiPass.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        uiPass.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+        id<MTLRenderCommandEncoder> uiEncoder = [commandBuffer renderCommandEncoderWithDescriptor:uiPass];
+        uiCallback((void*)commandBuffer, (void*)uiEncoder, (void*)uiPass);
+        [uiEncoder endEncoding];
+    }
+
+    [commandBuffer presentDrawable:drawable];
+    [commandBuffer commit];
+}
