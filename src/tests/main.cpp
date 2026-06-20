@@ -1,5 +1,6 @@
 #include "agent/command.h"
 #include "agent/script_runner.h"
+#include "capture/capture.h"
 #include "core/math.h"
 #include "core/object_id.h"
 #include "debug/debug_state.h"
@@ -446,6 +447,60 @@ int main()
         scene.createCamera({0.0f, 1.0f, 2.0f});
         std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, "repro.wbs");
         assert(text.find("Last Script: repro.wbs") != std::string::npos);
+    }
+
+    // Capture path generation.
+    {
+        std::filesystem::create_directories("captures");
+        std::string named = Capture::makeCapturePath("test_scene.png");
+        assert(named.find("captures/test_scene.png") != std::string::npos);
+
+        std::string defaulted = Capture::makeCapturePath();
+        assert(defaulted.find("captures/capture_") != std::string::npos);
+        assert(defaulted.find(".png") != std::string::npos);
+    }
+
+    // Capture filename validation.
+    {
+        assert(Capture::isValidFilename("test.png"));
+        assert(!Capture::isValidFilename(""));
+        assert(!Capture::isValidFilename("foo/bar.png"));
+        assert(!Capture::isValidFilename("..\\x.png"));
+        assert(!Capture::isValidFilename("../secret.png"));
+    }
+
+    // PNG writing.
+    {
+        std::vector<uint8_t> pixels = {
+            255, 0, 0, 255,   0, 255, 0, 255,
+            0, 0, 255, 255,   255, 255, 255, 255
+        };
+        std::string path = Capture::makeCapturePath("write_test.png");
+        assert(Capture::writePNG(path, pixels.data(), 2, 2));
+        assert(std::filesystem::exists(path));
+        std::filesystem::remove(path);
+    }
+
+    // render.capture command parsing and lastCapturePath tracking require a renderer.
+    // Without one the command reports an error but the path is validated.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("render.capture bad/name.png", ctx);
+        assert(!result.success);
+        assert(result.output.find("Invalid") != std::string::npos);
+        assert(ctx.lastCapturePath.empty());
+    }
+
+    // DebugState reports last capture path.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, {}, "captures/shot.png");
+        assert(text.find("Last Capture: captures/shot.png") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");

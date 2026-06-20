@@ -1,7 +1,9 @@
 #include "editor/editor.h"
 #include "agent/command.h"
 #include "agent/script_runner.h"
+#include "capture/capture.h"
 #include "debug/debug_state.h"
+#include "renderer/metal_renderer.h"
 #include "scene/mesh_renderer.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
@@ -85,6 +87,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
     drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
     drawScriptRunner(scene);
+    drawScreenshotPanel(scene);
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
@@ -205,7 +208,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Execute")) {
-        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_};
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_};
         AgentCommandResult result = executeCommand(commandBuffer_, ctx);
 
         consoleOutput_ += "> " + std::string(commandBuffer_) + "\n";
@@ -215,6 +218,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
         }
         commandBuffer_[0] = '\0';
         lastScriptPath_ = ctx.lastScriptPath;
+        lastCapturePath_ = ctx.lastCapturePath;
     }
 
     ImGui::Separator();
@@ -238,7 +242,7 @@ void Editor::drawScriptRunner(Scene& scene)
     ImGui::InputText("Script File", scriptBuffer_, sizeof(scriptBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Run Script")) {
-        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_};
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_};
         AgentCommandResult result = executeCommand(std::string("script.run ") + scriptBuffer_, ctx);
 
         scriptOutput_ = result.output;
@@ -246,6 +250,7 @@ void Editor::drawScriptRunner(Scene& scene)
             scriptOutput_ += result.output;
         }
         lastScriptPath_ = ctx.lastScriptPath;
+        lastCapturePath_ = ctx.lastCapturePath;
     }
 
     ImGui::Separator();
@@ -260,6 +265,30 @@ void Editor::drawScriptRunner(Scene& scene)
     ImGui::End();
 }
 
+void Editor::drawScreenshotPanel(Scene& scene)
+{
+    ImGui::SetNextWindowPos(ImVec2(650, 320), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 120), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Screenshot");
+
+    ImGui::InputText("Filename", screenshotBuffer_, sizeof(screenshotBuffer_));
+    ImGui::SameLine();
+    if (ImGui::Button("Capture Screenshot")) {
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_};
+        std::string command = std::string("render.capture ") + screenshotBuffer_;
+        AgentCommandResult result = executeCommand(command, ctx);
+        screenshotOutput_ = result.output;
+        lastCapturePath_ = ctx.lastCapturePath;
+    }
+
+    if (!screenshotOutput_.empty()) {
+        ImGui::TextUnformatted(screenshotOutput_.data(),
+                               screenshotOutput_.data() + screenshotOutput_.size());
+    }
+
+    ImGui::End();
+}
+
 void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 490), ImGuiCond_FirstUseEver);
@@ -267,12 +296,12 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     ImGui::Begin("Diagnostics");
 
     if (ImGui::Button("Write Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_);
         DebugState::writeToFile(text);
     }
 
     if (ImGui::Button("Copy Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_);
         ImGui::SetClipboardText(text.c_str());
     }
 

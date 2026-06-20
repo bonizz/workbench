@@ -32,6 +32,7 @@ bool Application::init()
     if (!editor_->init(window_->nativeView(), renderer_->device())) {
         return false;
     }
+    editor_->setRenderer(renderer_.get());
 
     scene_ = std::make_unique<Scene>();
     scene_->createCamera({0.0f, 3.0f, 5.0f});

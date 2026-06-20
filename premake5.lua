@@ -13,6 +13,9 @@ project "sandbox"
         "src/sandbox/main.mm",
         "src/engine/agent/**.cpp",
         "src/engine/agent/**.h",
+        "src/engine/capture/**.cpp",
+        "src/engine/capture/**.h",
+        "src/engine/capture/**.mm",
         "src/engine/core/**.cpp",
         "src/engine/core/**.h",
         "src/engine/debug/**.cpp",
@@ -69,6 +72,8 @@ project "tests"
         "src/engine/agent/command.h",
         "src/engine/agent/script_runner.cpp",
         "src/engine/agent/script_runner.h",
+        "src/engine/capture/capture.h",
+        "src/engine/capture/capture.mm",
         "src/engine/core/math.cpp",
         "src/engine/core/math.h",
         "src/engine/core/object_id.h",
@@ -79,6 +84,8 @@ project "tests"
         "src/engine/renderer/render_context.cpp",
         "src/engine/renderer/render_context.h",
         "src/engine/renderer/render_command.h",
+        "src/engine/renderer/metal_renderer.h",
+        "src/engine/renderer/metal_renderer.mm",
         "src/engine/scene/camera.cpp",
         "src/engine/scene/camera.h",
         "src/engine/scene/component.h",
@@ -98,6 +105,12 @@ project "tests"
     architecture "arm64"
 
     includedirs { "src", "src/engine", "external" }
+
+    links {
+        "Cocoa.framework",
+        "Metal.framework",
+        "QuartzCore.framework"
+    }
 
     filter "configurations:Debug"
         symbols "On"

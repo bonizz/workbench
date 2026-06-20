@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+class MetalRenderer;
 class Scene;
 class GameObject;
 
@@ -21,6 +22,12 @@ struct AgentCommandContext
 
     // Updated by script.run so debug.dump can report it.
     std::string lastScriptPath;
+
+    // Optional renderer handle for render.capture.
+    MetalRenderer* renderer = nullptr;
+
+    // Updated by render.capture so debug.dump can report it.
+    std::string lastCapturePath;
 };
 
 struct AgentCommandResult

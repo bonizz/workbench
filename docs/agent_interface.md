@@ -51,6 +51,7 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
 | `script.run <filename>` | Execute agent commands from `assets/scripts/<filename>`. |
+| `render.capture [filename]` | Queue a viewport screenshot to `captures/<filename>`. |
 
 ## Command Discovery
 

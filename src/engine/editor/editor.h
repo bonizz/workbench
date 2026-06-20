@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+class MetalRenderer;
 class Scene;
 class GameObject;
 
@@ -24,6 +25,8 @@ public:
 
     void drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
 
+    void setRenderer(MetalRenderer* renderer) { renderer_ = renderer; }
+
     const GameObject* selected() const { return selected_; }
 
 private:
@@ -32,13 +35,18 @@ private:
     void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene);
     void drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
     void drawScriptRunner(Scene& scene);
+    void drawScreenshotPanel(Scene& scene);
 
     bool initialized_ = false;
     GameObject* selected_ = nullptr;
+    MetalRenderer* renderer_ = nullptr;
     char nameBuffer_[128] = {};
     char commandBuffer_[256] = {};
     std::string consoleOutput_;
     char scriptBuffer_[128] = {};
     std::string scriptOutput_;
     std::string lastScriptPath_;
+    char screenshotBuffer_[128] = {};
+    std::string screenshotOutput_;
+    std::string lastCapturePath_;
 };

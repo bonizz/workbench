@@ -55,7 +55,8 @@ std::string build(uint64_t frame,
                   size_t renderCommandCount,
                   const Scene& scene,
                   const GameObject* selected,
-                  const std::string& lastScriptPath)
+                  const std::string& lastScriptPath,
+                  const std::string& lastCapturePath)
 {
     std::ostringstream out;
     out << std::fixed << std::setprecision(1);
@@ -69,6 +70,9 @@ std::string build(uint64_t frame,
     }
     if (!lastScriptPath.empty()) {
         out << "Last Script: " << lastScriptPath << "\n";
+    }
+    if (!lastCapturePath.empty()) {
+        out << "Last Capture: " << lastCapturePath << "\n";
     }
     out << "\n";
 

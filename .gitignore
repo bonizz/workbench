@@ -9,3 +9,5 @@ obj/
 *.d
 compile_commands.json
 imgui.ini
+captures/*
+!captures/.gitkeep

@@ -1,8 +1,10 @@
 #include "agent/command.h"
 
 #include "agent/script_runner.h"
+#include "capture/capture.h"
 #include "core/math.h"
 #include "debug/debug_state.h"
+#include "renderer/metal_renderer.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
 #include "scene/scene.h"
@@ -228,7 +230,7 @@ AgentCommandResult cmdDebugDump(const std::vector<std::string>&,
 {
     std::string text = DebugState::build(
         ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount, ctx.scene, ctx.selected,
-        ctx.lastScriptPath);
+        ctx.lastScriptPath, ctx.lastCapturePath);
     return makeSuccess(text);
 }
 
@@ -242,6 +244,29 @@ std::filesystem::path scriptPath(const std::string& filename)
 }
 
 } // namespace
+
+AgentCommandResult cmdRenderCapture(const std::vector<std::string>& args,
+                                    AgentCommandContext& ctx)
+{
+    std::string filename;
+    if (args.size() >= 2) {
+        filename = args[1];
+    }
+
+    if (!filename.empty() && !Capture::isValidFilename(filename)) {
+        return makeError("Invalid capture filename: " + filename);
+    }
+
+    std::string path = Capture::makeCapturePath(filename);
+
+    if (!ctx.renderer) {
+        return makeError("Renderer not available");
+    }
+
+    ctx.renderer->requestScreenshot(path);
+    ctx.lastCapturePath = path;
+    return makeSuccess("Queued screenshot: " + path);
+}
 
 AgentCommandResult cmdScriptRun(const std::vector<std::string>& args,
                                 AgentCommandContext& ctx)
@@ -573,6 +598,11 @@ const std::vector<CommandEntry>& commandTable()
           "Runs an agent command script from assets/scripts/<filename>.",
           "script.run create_test_scene.wbs"},
          cmdScriptRun},
+        {{"render.capture",
+          "render.capture [filename]",
+          "Queues a screenshot of the current viewport to captures/<filename>.",
+          "render.capture test_scene.png"},
+         cmdRenderCapture},
     };
     return table;
 }

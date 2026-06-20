@@ -3,6 +3,7 @@
 #include "render_context.h"
 
 #include <functional>
+#include <string>
 
 class MetalRenderer
 {
@@ -20,6 +21,10 @@ public:
 
     float aspectRatio() const;
     void* device() const;
+
+    // Queues a screenshot of the next completed frame. The PNG is written
+    // asynchronously from the command buffer completion handler.
+    void requestScreenshot(const std::string& path);
 
 private:
     struct Impl;

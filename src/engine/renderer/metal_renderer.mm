@@ -1,12 +1,16 @@
 #include "renderer/metal_renderer.h"
 #include "renderer/render_types.h"
+#include "capture/capture.h"
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <utility>
+#include <vector>
 
 struct MetalRenderer::Impl
 {
@@ -25,6 +29,8 @@ struct MetalRenderer::Impl
     NSUInteger dynamicVertexOffset = 0;
     static constexpr NSUInteger DYNAMIC_VERTEX_CAPACITY = 512;
     float aspectRatio = 1.0f;
+
+    std::string pendingScreenshotPath;
 };
 
 static id<MTLRenderPipelineState> loadPipeline(id<MTLDevice> device,
@@ -177,6 +183,11 @@ float MetalRenderer::aspectRatio() const
 void* MetalRenderer::device() const
 {
     return (void*)impl_->device;
+}
+
+void MetalRenderer::requestScreenshot(const std::string& path)
+{
+    impl_->pendingScreenshotPath = path;
 }
 
 void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], const UIRenderCallback& uiCallback)
@@ -346,6 +357,61 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
         id<MTLRenderCommandEncoder> uiEncoder = [commandBuffer renderCommandEncoderWithDescriptor:uiPass];
         uiCallback((void*)commandBuffer, (void*)uiEncoder, (void*)uiPass);
         [uiEncoder endEncoding];
+    }
+
+    // Screenshot capture reads back the final drawable after the UI pass.
+    if (!impl_->pendingScreenshotPath.empty()) {
+        NSUInteger captureWidth = drawable.texture.width;
+        NSUInteger captureHeight = drawable.texture.height;
+
+        MTLTextureDescriptor* stagingDesc = [MTLTextureDescriptor
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+            width:captureWidth
+            height:captureHeight
+            mipmapped:NO];
+        stagingDesc.storageMode = MTLStorageModeShared;
+        stagingDesc.usage = MTLTextureUsageShaderRead;
+        id<MTLTexture> staging = [impl_->device newTextureWithDescriptor:stagingDesc];
+
+        id<MTLBlitCommandEncoder> captureBlit = [commandBuffer blitCommandEncoder];
+        [captureBlit copyFromTexture:drawable.texture
+                         sourceSlice:0
+                         sourceLevel:0
+                        sourceOrigin:MTLOriginMake(0, 0, 0)
+                          sourceSize:MTLSizeMake(captureWidth, captureHeight, 1)
+                           toTexture:staging
+                    destinationSlice:0
+                    destinationLevel:0
+                   destinationOrigin:MTLOriginMake(0, 0, 0)];
+        [captureBlit endEncoding];
+
+        std::string capturePath = std::move(impl_->pendingScreenshotPath);
+        impl_->pendingScreenshotPath.clear();
+
+        __block id<MTLTexture> blockStaging = [staging retain];
+        [staging release];
+        [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer>) {
+            NSUInteger w = blockStaging.width;
+            NSUInteger h = blockStaging.height;
+            NSUInteger bytesPerRow = w * 4;
+            std::vector<uint8_t> bgra(bytesPerRow * h);
+            MTLRegion region = MTLRegionMake2D(0, 0, w, h);
+            [blockStaging getBytes:bgra.data()
+                       bytesPerRow:bytesPerRow
+                        fromRegion:region
+                       mipmapLevel:0];
+
+            std::vector<uint8_t> rgba(bgra.size());
+            for (size_t i = 0; i < w * h; ++i) {
+                rgba[i * 4 + 0] = bgra[i * 4 + 2];
+                rgba[i * 4 + 1] = bgra[i * 4 + 1];
+                rgba[i * 4 + 2] = bgra[i * 4 + 0];
+                rgba[i * 4 + 3] = bgra[i * 4 + 3];
+            }
+
+            Capture::writePNG(capturePath, rgba.data(), static_cast<int>(w), static_cast<int>(h));
+            [blockStaging release];
+        }];
     }
 
     [commandBuffer presentDrawable:drawable];
