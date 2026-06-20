@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/input_state.h"
 #include "core/time.h"
 #include "scene/camera.h"
 
@@ -43,14 +44,12 @@ private:
     bool keyS_ = false;
     bool keyD_ = false;
 
-    float baseMoveSpeed_ = 5.0f;
-    float moveSpeed_ = 5.0f;
-    float mouseSensitivity_ = 0.008f;
+    float mouseDeltaX_ = 0.0f;
+    float mouseDeltaY_ = 0.0f;
+    float scrollDelta_ = 0.0f;
 
     float clearColor_[4] = {0.03f, 0.05f, 0.08f, 1.0f};
 
     float fps_ = 0.0f;
     float frameTimeMs_ = 0.0f;
-
-    void updateCamera(float deltaTime);
 };

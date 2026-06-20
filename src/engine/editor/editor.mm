@@ -1,5 +1,8 @@
 #include "editor/editor.h"
 #include "scene/scene.h"
+#include "scene/game_object.h"
+
+#include <cstdio>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_osx.h"
@@ -69,17 +72,60 @@ void Editor::render(void* commandBuffer, void* renderEncoder, void* renderPassDe
     }
 }
 
-void Editor::drawPanels(Scene& scene, float fps, float frameTimeMs)
+void Editor::drawUI(Scene& scene, float fps, float frameTimeMs)
 {
-    (void)scene;
+    drawHierarchy(scene, fps, frameTimeMs);
+    drawInspector();
+}
 
+void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
+{
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(300, 120), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Workbench");
-    ImGui::Text("FPS: %.1f", fps);
-    ImGui::Text("Frame time: %.3f ms", frameTimeMs);
+    ImGui::SetNextWindowSize(ImVec2(260, 200), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Hierarchy");
 
-    const Vec3& pos = scene.camera().position;
-    ImGui::Text("Camera: %.1f, %.1f, %.1f", pos.x, pos.y, pos.z);
+    ImGui::Text("%.1f FPS  %.2f ms", fps, frameTimeMs);
+    ImGui::Separator();
+
+    for (const auto& obj : scene.objects()) {
+        ImGui::PushID(obj.get());
+        bool isSelected = (selected_ == obj.get());
+        if (ImGui::Selectable(obj->name().c_str(), isSelected)) {
+            selected_ = obj.get();
+            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::End();
+}
+
+void Editor::drawInspector()
+{
+    ImGui::SetNextWindowPos(ImVec2(10, 220), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(260, 260), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Inspector");
+
+    if (!selected_) {
+        ImGui::Text("No object selected");
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::InputText("Name", nameBuffer_, sizeof(nameBuffer_))) {
+        selected_->setName(nameBuffer_);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Transform");
+
+    Vec3& position = selected_->transform().position;
+    Vec3& rotation = selected_->transform().rotation;
+    Vec3& scale = selected_->transform().scale;
+
+    ImGui::DragFloat3("Position", &position.x, 0.1f);
+    ImGui::DragFloat3("Rotation", &rotation.x, 0.05f);
+    ImGui::DragFloat3("Scale", &scale.x, 0.05f);
+
     ImGui::End();
 }

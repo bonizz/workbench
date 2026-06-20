@@ -31,9 +31,9 @@ bool Application::init()
     }
 
     scene_ = std::make_unique<Scene>();
-    scene_->camera().position = {0.0f, 3.0f, 5.0f};
-    scene_->camera().yaw = 0.0f;
-    scene_->camera().pitch = -0.35f;
+    scene_->createCamera({0.0f, 3.0f, 5.0f});
+    scene_->camera().setActive(false);
+    scene_->camera().setAspect(renderer_->aspectRatio());
 
     GameObject* cube = scene_->createObject("Cube");
     cube->transform().position = {0.0f, 0.5f, 0.0f};
@@ -62,12 +62,29 @@ void Application::onResize(float width, float height, float scale)
     if (renderer_) {
         renderer_->resize(width, height, scale);
     }
+    if (scene_) {
+        scene_->camera().setAspect(renderer_ ? renderer_->aspectRatio() : (width / height));
+    }
 }
 
 void Application::onUpdate(float deltaTime)
 {
     time_.update(deltaTime);
-    updateCamera(time_.deltaTime());
+
+    InputState input;
+    input.forward = keyW_;
+    input.backward = keyS_;
+    input.left = keyA_;
+    input.right = keyD_;
+    input.mouseDeltaX = mouseDeltaX_;
+    input.mouseDeltaY = mouseDeltaY_;
+    input.scrollDelta = scrollDelta_;
+
+    scene_->camera().update(time_.deltaTime(), input);
+
+    mouseDeltaX_ = 0.0f;
+    mouseDeltaY_ = 0.0f;
+    scrollDelta_ = 0.0f;
 
     if (deltaTime > 0.0f) {
         fps_ = 1.0f / deltaTime;
@@ -78,13 +95,11 @@ void Application::onUpdate(float deltaTime)
 void Application::onRender()
 {
     editor_->beginFrame(window_->nativeView());
-    editor_->drawPanels(*scene_, fps_, frameTimeMs_);
+    editor_->drawUI(*scene_, fps_, frameTimeMs_);
     editor_->endFrame();
 
     RenderContext ctx;
-    Mat4 view = scene_->camera().viewMatrix();
-    Mat4 projection = perspective(60.0f * 3.14159f / 180.0f, renderer_->aspectRatio(), 0.1f, 100.0f);
-    ctx.setCamera(view, projection);
+    ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
     scene_->buildRenderCommands(ctx);
 
     renderer_->draw(ctx, clearColor_, [this](void* commandBuffer, void* renderEncoder, void* renderPassDescriptor) {
@@ -113,37 +128,15 @@ void Application::onMouseDrag(float deltaX, float deltaY)
         return;
     }
 
-    Camera& cam = scene_->camera();
-    cam.yaw += deltaX * mouseSensitivity_;
-    cam.pitch += deltaY * mouseSensitivity_;
-
-    const float maxPitch = 85.0f * 3.14159f / 180.0f;
-    if (cam.pitch > maxPitch) cam.pitch = maxPitch;
-    if (cam.pitch < -maxPitch) cam.pitch = -maxPitch;
+    mouseDeltaX_ += deltaX;
+    mouseDeltaY_ += deltaY;
 }
 
 void Application::onScroll(float delta)
 {
-    moveSpeed_ += delta;
-    if (moveSpeed_ < 1.0f) moveSpeed_ = 1.0f;
-    if (moveSpeed_ > 50.0f) moveSpeed_ = 50.0f;
-}
-
-void Application::updateCamera(float deltaTime)
-{
-    if (ImGui::GetIO().WantCaptureKeyboard) {
+    if (ImGui::GetIO().WantCaptureMouse) {
         return;
     }
 
-    Camera& cam = scene_->camera();
-    Vec3 f = cam.forward();
-    Vec3 r = cam.right();
-
-    float forwardInput = (keyW_ ? 1.0f : 0.0f) - (keyS_ ? 1.0f : 0.0f);
-    float rightInput   = (keyD_ ? 1.0f : 0.0f) - (keyA_ ? 1.0f : 0.0f);
-
-    float speed = moveSpeed_ * deltaTime;
-    cam.position.x += (f.x * forwardInput + r.x * rightInput) * speed;
-    cam.position.y += (f.y * forwardInput + r.y * rightInput) * speed;
-    cam.position.z += (f.z * forwardInput + r.z * rightInput) * speed;
+    scrollDelta_ += delta;
 }
