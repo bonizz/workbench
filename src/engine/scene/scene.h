@@ -14,6 +14,8 @@ public:
     GameObject* createObject(const std::string& name);
     Camera* createCamera(const Vec3& position);
 
+    GameObject* findObjectById(uint64_t id) const;
+
     Camera& camera() { return *camera_; }
     const Camera& camera() const { return *camera_; }
 

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 class Scene;
 class GameObject;
@@ -29,8 +30,11 @@ private:
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
     void drawInspector();
     void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene);
+    void drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
 
     bool initialized_ = false;
     GameObject* selected_ = nullptr;
     char nameBuffer_[128] = {};
+    char commandBuffer_[256] = {};
+    std::string consoleOutput_;
 };

@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "agent/command.h"
 #include "debug/debug_state.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
@@ -78,6 +79,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     drawHierarchy(scene, fps, frameTimeMs);
     drawInspector();
     drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
+    drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
@@ -115,6 +117,8 @@ void Editor::drawInspector()
         return;
     }
 
+    std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", selected_->name().c_str());
+
     if (ImGui::InputText("Name", nameBuffer_, sizeof(nameBuffer_))) {
         selected_->setName(nameBuffer_);
     }
@@ -129,6 +133,38 @@ void Editor::drawInspector()
     ImGui::DragFloat3("Position", &position.x, 0.1f);
     ImGui::DragFloat3("Rotation", &rotation.x, 0.05f);
     ImGui::DragFloat3("Scale", &scale.x, 0.05f);
+
+    ImGui::End();
+}
+
+void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
+{
+    ImGui::SetNextWindowPos(ImVec2(280, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Agent Console");
+
+    ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
+    ImGui::SameLine();
+    if (ImGui::Button("Execute")) {
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount};
+        AgentCommandResult result = executeCommand(commandBuffer_, ctx);
+
+        consoleOutput_ += "> " + std::string(commandBuffer_) + "\n";
+        consoleOutput_ += result.output;
+        if (!consoleOutput_.empty() && consoleOutput_.back() != '\n') {
+            consoleOutput_ += "\n";
+        }
+        commandBuffer_[0] = '\0';
+    }
+
+    ImGui::Separator();
+
+    ImVec2 outputSize = ImGui::GetContentRegionAvail();
+    ImGui::InputTextMultiline("##output",
+                              consoleOutput_.data(),
+                              consoleOutput_.size(),
+                              outputSize,
+                              ImGuiInputTextFlags_ReadOnly);
 
     ImGui::End();
 }

@@ -11,6 +11,8 @@ project "sandbox"
 
     files {
         "src/sandbox/main.mm",
+        "src/engine/agent/**.cpp",
+        "src/engine/agent/**.h",
         "src/engine/core/**.cpp",
         "src/engine/core/**.h",
         "src/engine/debug/**.cpp",
@@ -63,6 +65,8 @@ project "tests"
 
     files {
         "src/tests/main.cpp",
+        "src/engine/agent/command.cpp",
+        "src/engine/agent/command.h",
         "src/engine/core/math.cpp",
         "src/engine/core/math.h",
         "src/engine/core/object_id.h",

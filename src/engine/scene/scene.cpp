@@ -17,6 +17,16 @@ Camera* Scene::createCamera(const Vec3& position)
     return ptr;
 }
 
+GameObject* Scene::findObjectById(uint64_t id) const
+{
+    for (const auto& obj : objects_) {
+        if (obj->id().value == id) {
+            return obj.get();
+        }
+    }
+    return nullptr;
+}
+
 ObjectId Scene::allocateObjectId()
 {
     return ObjectId{nextObjectId_++};

@@ -1,0 +1,69 @@
+# Agent Command Interface
+
+Workbench exposes a small, text-based command surface that lets an agent (or a human developer) inspect and manipulate the editor without using the UI.
+
+This is intentionally local and in-process. There is no networking, JSON, or MCP in this milestone. Those layers can be added later as thin wrappers around the same command functions.
+
+## Philosophy
+
+- One text command for every common editor action.
+- No reflection, no command framework, no serialization.
+- Plain struct context and plain struct result.
+- The command layer is decoupled from the transport that might eventually call it.
+
+## API
+
+```cpp
+struct AgentCommandContext {
+    Scene& scene;
+    GameObject*& selected;
+    uint64_t frame = 0;
+    float fps = 0.0f;
+    float frameTimeMs = 0.0f;
+    size_t renderCommandCount = 0;
+};
+
+struct AgentCommandResult {
+    bool success = false;
+    std::string output;
+};
+
+AgentCommandResult executeCommand(const std::string& command, AgentCommandContext& ctx);
+```
+
+## Current Commands
+
+| Command | Description |
+|---|---|
+| `scene.list` | List all objects sorted by id. |
+| `scene.select <id>` | Select the object with the given id. |
+| `scene.get_selected` | Show the current selection. |
+| `transform.get <id>` | Show position, rotation, and scale of an object. |
+| `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
+| `debug.dump` | Return the same snapshot produced by `DebugState`. |
+
+## Agent Console
+
+The editor has an **Agent Console** panel where commands can be typed and executed. The result is printed in the panel.
+
+This panel is for development and debugging. It is not meant to be the final agent integration point.
+
+## Testing
+
+Command behavior is covered by the existing `tests` executable:
+
+- `scene.list` returns created objects.
+- `scene.select` updates the selection pointer.
+- `transform.set_position` updates object state.
+- `debug.dump` returns a valid state snapshot.
+
+## Future MCP Direction
+
+A future MCP adapter can:
+
+1. Receive a request string.
+2. Build an `AgentCommandContext`.
+3. Call `executeCommand`.
+4. Wrap `AgentCommandResult::output` into the response format the protocol expects.
+
+The command logic itself should not need to change.
