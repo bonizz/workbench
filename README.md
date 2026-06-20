@@ -34,6 +34,11 @@ In the editor, use **Copy Debug State** to paste the current engine state into c
 or **Write Debug State** to save `logs/latest_state.txt`.
 See `docs/observability.md` for details.
 
+New to the codebase? Read `docs/conventions.md` first — it covers the
+determinism model, camera special rules, math/units, id-vs-name addressing,
+the serialization contract, and the DebugState stability rule that source files
+alone do not surface. `AGENTS.md` has a full docs map.
+
 Philosophy:
 
 Build features because prototypes need them, not because engines are supposed to have them.

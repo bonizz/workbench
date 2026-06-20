@@ -8,6 +8,30 @@ The primary goal is understanding engine architecture through implementation.
 
 The code should favor readability, simplicity, and explicitness over abstraction and optimization.
 
+Start Here / Docs Map
+
+Read these before touching the engine. They encode the conventions and
+contracts that source files alone do not surface.
+
+* `docs/conventions.md` — READ FIRST. Determinism model, camera special rules,
+  math/units (radians vs degrees), id-vs-name addressing, serialization contract,
+  DebugState stability rule, and the component/command extension checklists.
+* `docs/scenes.md` — GameObject/Transform data model and scene file format.
+* `docs/components.md` — Component model, lifecycle (`onStart`/`onUpdate`),
+  `MeshRenderer`, `RotateComponent`.
+* `docs/agent_interface.md` — the full agent command surface and context struct.
+* `docs/test_suites.md`, `docs/assertions.md`, `docs/scripts.md`,
+  `docs/cli_automation.md` — how tests and automation run.
+* `docs/observability.md`, `docs/capture.md`, `docs/bundles.md` — DebugState and
+  repro artifacts (the primary agent feedback loop).
+* `docs/plans/` — milestone plans. The architectural decision log (read the
+  latest before proposing changes).
+
+Source layout: `src/engine/{scene,agent,renderer,editor,debug,core,platform,capture}`.
+Key entry points: `scene/scene.h`, `scene/game_object.h`, `scene/transform.h`,
+`scene/component.h`, `agent/command.cpp` (the `commandTable()` catalogs engine
+capabilities), `core/application.cpp` (the frame + automation loop).
+
 Design Principles
 
 * Prefer simple solutions first.
