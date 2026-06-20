@@ -69,6 +69,8 @@ private:
     bool keyA_ = false;
     bool keyS_ = false;
     bool keyD_ = false;
+    bool keyQ_ = false;
+    bool keyE_ = false;
 
     float mouseDeltaX_ = 0.0f;
     float mouseDeltaY_ = 0.0f;

@@ -203,6 +203,8 @@ void Application::onUpdate(float deltaTime)
     input.backward = keyS_;
     input.left = keyA_;
     input.right = keyD_;
+    input.up = keyE_;
+    input.down = keyQ_;
     input.mouseDeltaX = mouseDeltaX_;
     input.mouseDeltaY = mouseDeltaY_;
     input.scrollDelta = scrollDelta_;
@@ -283,6 +285,8 @@ void Application::onKeyEvent(int keyCode, bool down)
         case 'a': case 'A': keyA_ = down; break;
         case 's': case 'S': keyS_ = down; break;
         case 'd': case 'D': keyD_ = down; break;
+        case 'q': case 'Q': keyQ_ = down; break;
+        case 'e': case 'E': keyE_ = down; break;
         default: break;
     }
 }

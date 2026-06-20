@@ -23,9 +23,10 @@ void Camera::update(float deltaTime, const InputState& input)
     yaw_ = transform().rotation.y;
     pitch_ = transform().rotation.x;
 
-    // Mouse look.
+    // Mouse look. Y is inverted (trackpad/mouse down looks down) so dragging
+    // up pitches the view down, matching the requested inverted-Y feel.
     yaw_ += input.mouseDeltaX * rotationSpeed_ * 0.01f;
-    pitch_ += input.mouseDeltaY * rotationSpeed_ * 0.01f;
+    pitch_ -= input.mouseDeltaY * rotationSpeed_ * 0.01f;
 
     if (pitch_ > kMaxPitch) pitch_ = kMaxPitch;
     if (pitch_ < -kMaxPitch) pitch_ = -kMaxPitch;
@@ -38,10 +39,12 @@ void Camera::update(float deltaTime, const InputState& input)
 
     float forwardInput = (input.forward ? 1.0f : 0.0f) - (input.backward ? 1.0f : 0.0f);
     float rightInput   = (input.right ? 1.0f : 0.0f) - (input.left ? 1.0f : 0.0f);
+    // Vertical strafe is along world Y (fly-cam convention: E up, Q down).
+    float upInput       = (input.up ? 1.0f : 0.0f) - (input.down ? 1.0f : 0.0f);
 
     float speed = moveSpeed_ * deltaTime;
     transform().position.x += (f.x * forwardInput + r.x * rightInput) * speed;
-    transform().position.y += (f.y * forwardInput + r.y * rightInput) * speed;
+    transform().position.y += (f.y * forwardInput + r.y * rightInput + upInput) * speed;
     transform().position.z += (f.z * forwardInput + r.z * rightInput) * speed;
 
     // Scroll adjusts movement speed.
