@@ -148,6 +148,37 @@ int main()
         assert(!result.success);
     }
 
+    // Command discovery.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        scene.createObject("Cube");
+
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("agent.commands", ctx);
+        assert(result.success);
+        assert(result.output.find("agent.commands") != std::string::npos);
+        assert(result.output.find("agent.help") != std::string::npos);
+        assert(result.output.find("scene.list") != std::string::npos);
+        assert(result.output.find("transform.set_position") != std::string::npos);
+
+        result = executeCommand("agent.help", ctx);
+        assert(result.success);
+        assert(result.output.find("Workbench Agent Interface") != std::string::npos);
+        assert(result.output.find("agent.commands") != std::string::npos);
+
+        result = executeCommand("agent.help scene.select", ctx);
+        assert(result.success);
+        assert(result.output.find("scene.select <id>") != std::string::npos);
+        assert(result.output.find("Selects a GameObject by ObjectId") != std::string::npos);
+        assert(result.output.find("scene.select 2") != std::string::npos);
+
+        result = executeCommand("agent.help not_a_command", ctx);
+        assert(!result.success);
+    }
+
     std::printf("All tests passed.\n");
     return 0;
 }

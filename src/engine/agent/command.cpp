@@ -9,13 +9,30 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <sstream>
+#include <string>
 #include <vector>
 
 namespace {
 
 constexpr float kRadToDeg = 180.0f / 3.14159265f;
+
+struct CommandInfo {
+    std::string name;
+    std::string usage;
+    std::string description;
+    std::string example;
+};
+
+using CommandHandler = std::function<AgentCommandResult(const std::vector<std::string>&,
+                                                        AgentCommandContext&)>;
+
+struct CommandEntry {
+    CommandInfo info;
+    CommandHandler handler;
+};
 
 std::string trim(const std::string& s)
 {
@@ -105,7 +122,8 @@ AgentCommandResult makeSuccess(const std::string& message)
     return AgentCommandResult{true, message};
 }
 
-AgentCommandResult sceneList(const AgentCommandContext& ctx)
+AgentCommandResult cmdSceneList(const std::vector<std::string>&,
+                                const AgentCommandContext& ctx)
 {
     std::ostringstream oss;
     oss << "Scene:\n";
@@ -115,7 +133,8 @@ AgentCommandResult sceneList(const AgentCommandContext& ctx)
     return makeSuccess(oss.str());
 }
 
-AgentCommandResult sceneSelect(AgentCommandContext& ctx, const std::vector<std::string>& args)
+AgentCommandResult cmdSceneSelect(const std::vector<std::string>& args,
+                                  AgentCommandContext& ctx)
 {
     if (args.size() < 2) {
         return makeError("Usage: scene.select <id>");
@@ -134,7 +153,8 @@ AgentCommandResult sceneSelect(AgentCommandContext& ctx, const std::vector<std::
     return makeSuccess(oss.str());
 }
 
-AgentCommandResult sceneGetSelected(const AgentCommandContext& ctx)
+AgentCommandResult cmdSceneGetSelected(const std::vector<std::string>&,
+                                       const AgentCommandContext& ctx)
 {
     if (ctx.selected) {
         std::ostringstream oss;
@@ -144,7 +164,8 @@ AgentCommandResult sceneGetSelected(const AgentCommandContext& ctx)
     return makeSuccess("Selected: none");
 }
 
-AgentCommandResult transformGet(const AgentCommandContext& ctx, const std::vector<std::string>& args)
+AgentCommandResult cmdTransformGet(const std::vector<std::string>& args,
+                                   const AgentCommandContext& ctx)
 {
     if (args.size() < 2) {
         return makeError("Usage: transform.get <id>");
@@ -166,7 +187,8 @@ AgentCommandResult transformGet(const AgentCommandContext& ctx, const std::vecto
     return makeSuccess(oss.str());
 }
 
-AgentCommandResult transformSetPosition(AgentCommandContext& ctx, const std::vector<std::string>& args)
+AgentCommandResult cmdTransformSetPosition(const std::vector<std::string>& args,
+                                           AgentCommandContext& ctx)
 {
     if (args.size() < 5) {
         return makeError("Usage: transform.set_position <id> <x> <y> <z>");
@@ -190,11 +212,104 @@ AgentCommandResult transformSetPosition(AgentCommandContext& ctx, const std::vec
     return makeSuccess(oss.str());
 }
 
-AgentCommandResult debugDump(const AgentCommandContext& ctx)
+AgentCommandResult cmdDebugDump(const std::vector<std::string>&,
+                                const AgentCommandContext& ctx)
 {
     std::string text = DebugState::build(
         ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount, ctx.scene, ctx.selected);
     return makeSuccess(text);
+}
+
+const std::vector<CommandEntry>& commandTable();
+
+AgentCommandResult cmdAgentCommands(const std::vector<std::string>&,
+                                    AgentCommandContext&)
+{
+    std::ostringstream oss;
+    for (const auto& entry : commandTable()) {
+        oss << entry.info.name << "\n";
+    }
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdAgentHelp(const std::vector<std::string>& args,
+                                AgentCommandContext&)
+{
+    if (args.size() < 2) {
+        std::ostringstream oss;
+        oss << "Workbench Agent Interface\n\n";
+        oss << "Use:\n\n";
+        oss << "agent.commands\n\n";
+        oss << "to list all available commands.\n\n";
+        oss << "Use:\n\n";
+        oss << "agent.help <command>\n\n";
+        oss << "for command-specific help.\n\n";
+        oss << "Commands:\n";
+        for (const auto& entry : commandTable()) {
+            oss << entry.info.name << "\n";
+        }
+        return makeSuccess(oss.str());
+    }
+
+    const std::string& target = args[1];
+    for (const auto& entry : commandTable()) {
+        if (entry.info.name == target) {
+            std::ostringstream oss;
+            oss << entry.info.usage << "\n\n";
+            oss << entry.info.description << "\n\n";
+            oss << "Example:\n";
+            oss << entry.info.example << "\n";
+            return makeSuccess(oss.str());
+        }
+    }
+    return makeError("No help available for: " + target);
+}
+
+const std::vector<CommandEntry>& commandTable()
+{
+    static const std::vector<CommandEntry> table = {
+        {{"agent.commands",
+          "agent.commands",
+          "Lists all available commands.",
+          "agent.commands"},
+         cmdAgentCommands},
+        {{"agent.help",
+          "agent.help <command>",
+          "Shows general help or help for a specific command.",
+          "agent.help scene.select"},
+         cmdAgentHelp},
+        {{"scene.list",
+          "scene.list",
+          "Lists all GameObjects in the scene.",
+          "scene.list"},
+         cmdSceneList},
+        {{"scene.select",
+          "scene.select <id>",
+          "Selects a GameObject by ObjectId.",
+          "scene.select 2"},
+         cmdSceneSelect},
+        {{"scene.get_selected",
+          "scene.get_selected",
+          "Returns the currently selected GameObject.",
+          "scene.get_selected"},
+         cmdSceneGetSelected},
+        {{"transform.get",
+          "transform.get <id>",
+          "Shows the transform of a GameObject.",
+          "transform.get 2"},
+         cmdTransformGet},
+        {{"transform.set_position",
+          "transform.set_position <id> <x> <y> <z>",
+          "Updates the position of a GameObject.",
+          "transform.set_position 2 1.0 0.0 0.0"},
+         cmdTransformSetPosition},
+        {{"debug.dump",
+          "debug.dump",
+          "Returns a full debug state snapshot.",
+          "debug.dump"},
+         cmdDebugDump},
+    };
+    return table;
 }
 
 } // namespace
@@ -209,23 +324,10 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
     std::vector<std::string> args = split(input);
     const std::string& verb = args[0];
 
-    if (verb == "scene.list") {
-        return sceneList(ctx);
-    }
-    if (verb == "scene.select") {
-        return sceneSelect(ctx, args);
-    }
-    if (verb == "scene.get_selected") {
-        return sceneGetSelected(ctx);
-    }
-    if (verb == "transform.get") {
-        return transformGet(ctx, args);
-    }
-    if (verb == "transform.set_position") {
-        return transformSetPosition(ctx, args);
-    }
-    if (verb == "debug.dump") {
-        return debugDump(ctx);
+    for (const auto& entry : commandTable()) {
+        if (entry.info.name == verb) {
+            return entry.handler(args, ctx);
+        }
     }
 
     return makeError("Unknown command: " + verb);

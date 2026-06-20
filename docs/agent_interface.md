@@ -35,12 +35,29 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 
 | Command | Description |
 |---|---|
+| `agent.help [command]` | Show general help or help for a specific command. |
+| `agent.commands` | List all available commands. |
 | `scene.list` | List all objects sorted by id. |
 | `scene.select <id>` | Select the object with the given id. |
 | `scene.get_selected` | Show the current selection. |
 | `transform.get <id>` | Show position, rotation, and scale of an object. |
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
+
+## Command Discovery
+
+An agent can discover the available command surface without reading documentation.
+
+- `agent.help` shows how to use the interface and lists every command, including `agent.help` and `agent.commands`.
+- `agent.commands` returns a concise list of command names.
+- `agent.help <command>` returns usage, description, and an example for that command.
+
+### Recommended agent startup sequence
+
+1. `agent.help`
+2. `agent.commands`
+3. Query current state (`scene.list`, `debug.dump`, etc.)
+4. Perform actions (`scene.select`, `transform.set_position`, etc.)
 
 ## Agent Console
 
@@ -52,6 +69,10 @@ This panel is for development and debugging. It is not meant to be the final age
 
 Command behavior is covered by the existing `tests` executable:
 
+- `agent.commands` returns all command names.
+- `agent.help` returns the general help text.
+- `agent.help scene.select` returns usage, description, and an example.
+- Unknown help targets return a useful error.
 - `scene.list` returns created objects.
 - `scene.select` updates the selection pointer.
 - `transform.set_position` updates object state.
