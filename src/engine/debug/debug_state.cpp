@@ -59,7 +59,11 @@ std::string build(uint64_t frame,
     out << "Workbench State\n\n";
     out << "Frame: " << frame << "\n";
     out << "FPS: " << fps << "\n";
-    out << "FrameTime: " << frameTimeMs << " ms\n\n";
+    out << "FrameTime: " << frameTimeMs << " ms\n";
+    if (!scene.loadedScenePath().empty()) {
+        out << "SceneFile: " << scene.loadedScenePath() << "\n";
+    }
+    out << "\n";
 
     out << "Scene:\n";
     for (const GameObject* obj : sortedObjects(scene)) {

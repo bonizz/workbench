@@ -102,6 +102,34 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         ImGui::PopID();
     }
 
+    ImGui::Separator();
+
+    if (ImGui::Button("Create Cube")) {
+        GameObject* obj = scene.createObject("Cube");
+        selected_ = obj;
+        std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+    }
+
+    bool canModifySelection = selected_ && !scene.isCamera(selected_);
+
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!canModifySelection);
+    if (ImGui::Button("Duplicate")) {
+        GameObject* dup = scene.duplicateObject(selected_);
+        if (dup) {
+            selected_ = dup;
+            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", dup->name().c_str());
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Delete")) {
+        scene.deleteObject(selected_);
+        selected_ = nullptr;
+        nameBuffer_[0] = '\0';
+    }
+    ImGui::EndDisabled();
+
     ImGui::End();
 }
 

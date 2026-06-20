@@ -83,6 +83,8 @@ project "tests"
         "src/engine/scene/game_object.h",
         "src/engine/scene/scene.cpp",
         "src/engine/scene/scene.h",
+        "src/engine/scene/scene_serializer.cpp",
+        "src/engine/scene/scene_serializer.h",
         "src/engine/scene/transform.cpp",
         "src/engine/scene/transform.h"
     }

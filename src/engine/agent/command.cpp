@@ -4,11 +4,13 @@
 #include "debug/debug_state.h"
 #include "scene/game_object.h"
 #include "scene/scene.h"
+#include "scene/scene_serializer.h"
 #include "scene/transform.h"
 
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <iomanip>
 #include <sstream>
@@ -33,6 +35,11 @@ struct CommandEntry {
     CommandInfo info;
     CommandHandler handler;
 };
+
+std::string scenePath(const std::string& filename)
+{
+    return "assets/scenes/" + filename;
+}
 
 std::string trim(const std::string& s)
 {
@@ -220,6 +227,118 @@ AgentCommandResult cmdDebugDump(const std::vector<std::string>&,
     return makeSuccess(text);
 }
 
+AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
+                                      AgentCommandContext& ctx)
+{
+    std::string name = "Cube";
+    if (args.size() >= 2) {
+        name = args[1];
+    }
+
+    GameObject* obj = ctx.scene.createObject(name);
+    ctx.selected = obj;
+
+    std::ostringstream oss;
+    oss << "Created " << obj->name() << " [" << obj->id().value << "]";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSceneDelete(const std::vector<std::string>& args,
+                                  AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.delete <id>");
+    }
+    uint64_t id = 0;
+    if (!parseUint64(args[1], id)) {
+        return makeError("Invalid object id: " + args[1]);
+    }
+    GameObject* obj = ctx.scene.findObjectById(id);
+    if (!obj) {
+        return makeError("Object not found: " + args[1]);
+    }
+    if (ctx.scene.isCamera(obj)) {
+        return makeError("Cannot delete the camera");
+    }
+
+    if (ctx.scene.deleteObject(obj)) {
+        if (ctx.selected == obj) {
+            ctx.selected = nullptr;
+        }
+        return makeSuccess("Deleted object " + args[1]);
+    }
+    return makeError("Failed to delete object " + args[1]);
+}
+
+AgentCommandResult cmdSceneDuplicate(const std::vector<std::string>& args,
+                                     AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.duplicate <id>");
+    }
+    uint64_t id = 0;
+    if (!parseUint64(args[1], id)) {
+        return makeError("Invalid object id: " + args[1]);
+    }
+    GameObject* obj = ctx.scene.findObjectById(id);
+    if (!obj) {
+        return makeError("Object not found: " + args[1]);
+    }
+    if (ctx.scene.isCamera(obj)) {
+        return makeError("Cannot duplicate the camera");
+    }
+
+    GameObject* copy = ctx.scene.duplicateObject(obj);
+    if (!copy) {
+        return makeError("Failed to duplicate object " + args[1]);
+    }
+
+    ctx.selected = copy;
+    std::ostringstream oss;
+    oss << "Duplicated " << obj->name() << " [" << obj->id().value << "] -> "
+        << copy->name() << " [" << copy->id().value << "]";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSceneSave(const std::vector<std::string>& args,
+                                AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.save <filename>");
+    }
+
+    std::string path = scenePath(args[1]);
+    std::string error;
+    if (!SceneSerializer::save(ctx.scene, path, error)) {
+        return makeError(error);
+    }
+
+    ctx.scene.setLoadedScenePath(args[1]);
+    return makeSuccess("Saved scene to " + path);
+}
+
+AgentCommandResult cmdSceneLoad(const std::vector<std::string>& args,
+                                AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.load <filename>");
+    }
+
+    std::string path = scenePath(args[1]);
+    if (!std::filesystem::exists(path)) {
+        return makeError("Scene file not found: " + path);
+    }
+
+    std::string error;
+    if (!SceneSerializer::load(ctx.scene, path, error)) {
+        return makeError(error);
+    }
+
+    ctx.selected = nullptr;
+    ctx.scene.setLoadedScenePath(args[1]);
+    return makeSuccess("Loaded scene from " + path);
+}
+
 const std::vector<CommandEntry>& commandTable();
 
 AgentCommandResult cmdAgentCommands(const std::vector<std::string>&,
@@ -293,6 +412,31 @@ const std::vector<CommandEntry>& commandTable()
           "Returns the currently selected GameObject.",
           "scene.get_selected"},
          cmdSceneGetSelected},
+        {{"scene.create_cube",
+          "scene.create_cube [name]",
+          "Creates a new GameObject at the origin.",
+          "scene.create_cube Cube2"},
+         cmdSceneCreateCube},
+        {{"scene.delete",
+          "scene.delete <id>",
+          "Deletes a GameObject by ObjectId.",
+          "scene.delete 3"},
+         cmdSceneDelete},
+        {{"scene.duplicate",
+          "scene.duplicate <id>",
+          "Duplicates a GameObject by ObjectId.",
+          "scene.duplicate 2"},
+         cmdSceneDuplicate},
+        {{"scene.save",
+          "scene.save <filename>",
+          "Saves authored objects to assets/scenes/<filename>.",
+          "scene.save test.scene"},
+         cmdSceneSave},
+        {{"scene.load",
+          "scene.load <filename>",
+          "Loads authored objects from assets/scenes/<filename>.",
+          "scene.load test.scene"},
+         cmdSceneLoad},
         {{"transform.get",
           "transform.get <id>",
           "Shows the transform of a GameObject.",

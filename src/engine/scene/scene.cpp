@@ -1,5 +1,7 @@
 #include "scene/scene.h"
 
+#include <algorithm>
+
 GameObject* Scene::createObject(const std::string& name)
 {
     auto obj = std::make_unique<GameObject>(allocateObjectId(), name);
@@ -39,5 +41,50 @@ void Scene::buildRenderCommands(RenderContext& ctx) const
     for (const auto& obj : objects_) {
         if (!obj->active()) continue;
         ctx.drawCube(obj->transform().localMatrix(), obj->color);
+    }
+}
+
+bool Scene::deleteObject(GameObject* obj)
+{
+    if (!obj || obj == camera_) {
+        return false;
+    }
+
+    auto it = std::find_if(objects_.begin(), objects_.end(),
+                           [obj](const std::unique_ptr<GameObject>& o) {
+                               return o.get() == obj;
+                           });
+    if (it == objects_.end()) {
+        return false;
+    }
+
+    objects_.erase(it);
+    return true;
+}
+
+GameObject* Scene::duplicateObject(GameObject* obj)
+{
+    if (!obj || obj == camera_) {
+        return nullptr;
+    }
+
+    GameObject* copy = createObject(obj->name() + " Copy");
+    copy->transform() = obj->transform();
+    copy->color = obj->color;
+    return copy;
+}
+
+void Scene::clearObjects()
+{
+    std::unique_ptr<GameObject> camera;
+    for (auto& obj : objects_) {
+        if (obj.get() == camera_) {
+            camera = std::move(obj);
+        }
+    }
+
+    objects_.clear();
+    if (camera) {
+        objects_.push_back(std::move(camera));
     }
 }

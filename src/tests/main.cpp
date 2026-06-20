@@ -6,6 +6,7 @@
 #include "scene/camera.h"
 #include "scene/game_object.h"
 #include "scene/scene.h"
+#include "scene/scene_serializer.h"
 #include "scene/transform.h"
 
 #include <cassert>
@@ -177,6 +178,125 @@ int main()
 
         result = executeCommand("agent.help not_a_command", ctx);
         assert(!result.success);
+    }
+
+    // Scene authoring operations.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+
+        GameObject* a = scene.createObject("A");
+        a->transform().position = {1.0f, 2.0f, 3.0f};
+        a->transform().scale = {2.0f, 2.0f, 2.0f};
+        a->color = {0.1f, 0.2f, 0.3f, 0.4f};
+
+        GameObject* copy = scene.duplicateObject(a);
+        assert(copy != nullptr);
+        assert(copy->name() == "A Copy");
+        assert(copy->transform().position.x == 1.0f);
+        assert(copy->transform().scale.x == 2.0f);
+        assert(copy->color.x == 0.1f);
+        assert(scene.objects().size() == 3);
+
+        assert(scene.deleteObject(a));
+        assert(scene.objects().size() == 2);
+        assert(scene.findObjectById(a->id().value) == nullptr);
+    }
+
+    // Scene save/load.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+
+        GameObject* a = scene.createObject("A");
+        a->transform().position = {1.5f, 2.5f, 3.5f};
+        a->transform().rotation = {0.1f, 0.2f, 0.3f};
+        a->transform().scale = {2.0f, 1.0f, 0.5f};
+        a->color = {0.1f, 0.2f, 0.3f, 0.4f};
+
+        const char* path = "build/tests/test_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+        assert(std::filesystem::exists(path));
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        loaded.createObject("WillBeCleared");
+        assert(SceneSerializer::load(loaded, path, error));
+
+        assert(loaded.objects().size() == 2);
+        GameObject* loadedA = nullptr;
+        for (const auto& obj : loaded.objects()) {
+            if (!loaded.isCamera(obj.get())) {
+                loadedA = obj.get();
+            }
+        }
+        assert(loadedA != nullptr);
+        assert(loadedA->name() == "A");
+        assert(loadedA->transform().position.x == 1.5f);
+        assert(loadedA->transform().position.y == 2.5f);
+        assert(loadedA->transform().position.z == 3.5f);
+        assert(loadedA->transform().rotation.x == 0.1f);
+        assert(loadedA->transform().rotation.y == 0.2f);
+        assert(loadedA->transform().rotation.z == 0.3f);
+        assert(loadedA->transform().scale.x == 2.0f);
+        assert(loadedA->transform().scale.y == 1.0f);
+        assert(loadedA->transform().scale.z == 0.5f);
+        assert(loadedA->color.x == 0.1f);
+        assert(loadedA->color.y == 0.2f);
+        assert(loadedA->color.z == 0.3f);
+        assert(loadedA->color.w == 0.4f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Scene authoring agent commands.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("scene.create_cube TestA", ctx);
+        assert(result.success);
+        assert(selected != nullptr);
+        assert(selected->name() == "TestA");
+        selected->transform().position = {1.0f, 0.0f, 0.0f};
+
+        uint64_t id = selected->id().value;
+        result = executeCommand("scene.duplicate " + std::to_string(id), ctx);
+        assert(result.success);
+        assert(selected != nullptr);
+        assert(selected->name() == "TestA Copy");
+
+        uint64_t copyId = selected->id().value;
+        result = executeCommand("scene.delete " + std::to_string(copyId), ctx);
+        assert(result.success);
+        assert(selected == nullptr);
+
+        result = executeCommand("scene.save test_cmd.scene", ctx);
+        assert(result.success);
+        assert(scene.loadedScenePath() == "test_cmd.scene");
+
+        selected = scene.findObjectById(id);
+        assert(selected != nullptr);
+        result = executeCommand("scene.load test_cmd.scene", ctx);
+        assert(result.success);
+        assert(selected == nullptr);
+        assert(scene.objects().size() == 2);
+
+        std::filesystem::remove("assets/scenes/test_cmd.scene");
+    }
+
+    // DebugState includes loaded scene filename.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        scene.createObject("Cube");
+        scene.setLoadedScenePath("test.scene");
+
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 2, scene, nullptr);
+        assert(text.find("SceneFile: test.scene") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");
