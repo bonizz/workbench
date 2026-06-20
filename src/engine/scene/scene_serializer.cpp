@@ -146,7 +146,7 @@ public:
         if (!expect(TokenType::ArrayBegin, error)) return false;
 
         while (current_.type != TokenType::ArrayEnd) {
-            if (!parseObject(scene, error)) return false;
+            if (!parseObject(scene, error, nullptr)) return false;
             if (current_.type == TokenType::Comma) {
                 advance();
             } else if (current_.type != TokenType::ArrayEnd) {
@@ -165,15 +165,14 @@ public:
     }
 
 private:
-    bool parseObject(Scene& scene, std::string& error)
+    // Creates the GameObject up front (so any field order, including children,
+    // can attach to it), applies fields as they are read, then attaches to
+    // parent. Top-down recursion guarantees the parent exists before children.
+    bool parseObject(Scene& scene, std::string& error, GameObject* parent)
     {
         if (!expect(TokenType::ObjectBegin, error)) return false;
 
-        std::string name = "Object";
-        Vec3 position{0.0f, 0.0f, 0.0f};
-        Vec3 rotation{0.0f, 0.0f, 0.0f};
-        Vec3 scale{1.0f, 1.0f, 1.0f};
-        std::vector<std::unique_ptr<Component>> components;
+        GameObject* obj = scene.createObject("Object");
 
         bool firstField = true;
         while (current_.type != TokenType::ObjectEnd) {
@@ -200,16 +199,22 @@ private:
                     error = "Expected string for name";
                     return false;
                 }
-                name = current_.text;
+                obj->setName(current_.text);
                 advance();
             } else if (field == "position") {
-                if (!parseFloat3(position, error)) return false;
+                if (!parseFloat3(obj->transform().position, error)) return false;
             } else if (field == "rotation") {
-                if (!parseFloat3(rotation, error)) return false;
+                if (!parseFloat3(obj->transform().rotation, error)) return false;
             } else if (field == "scale") {
-                if (!parseFloat3(scale, error)) return false;
+                if (!parseFloat3(obj->transform().scale, error)) return false;
             } else if (field == "components") {
-                if (!parseComponents(components, error)) return false;
+                std::vector<std::unique_ptr<Component>> comps;
+                if (!parseComponents(comps, error)) return false;
+                for (auto& c : comps) {
+                    obj->addComponent(std::move(c));
+                }
+            } else if (field == "children") {
+                if (!parseChildren(scene, obj, error)) return false;
             } else {
                 error = "Unknown field: " + field;
                 return false;
@@ -218,19 +223,34 @@ private:
 
         if (!expect(TokenType::ObjectEnd, error)) return false;
 
-        GameObject* obj = scene.createObject(name);
-        obj->transform().position = position;
-        obj->transform().rotation = rotation;
-        obj->transform().scale = scale;
-        for (auto& comp : components) {
-            obj->addComponent(std::move(comp));
+        // Attach to parent (top-down: parent already exists and is fresh).
+        if (parent && !scene.setParent(obj, parent)) {
+            error = "Failed to attach child '" + obj->name() + "' to parent";
+            return false;
         }
 
         if (!obj->hasComponent<MeshRenderer>()) {
-            addWarning("Object '" + name + "' has no MeshRenderer and will not render.");
+            addWarning("Object '" + obj->name() + "' has no MeshRenderer and will not render.");
         }
 
         return true;
+    }
+
+    bool parseChildren(Scene& scene, GameObject* parent, std::string& error)
+    {
+        if (!expect(TokenType::ArrayBegin, error)) return false;
+
+        while (current_.type != TokenType::ArrayEnd) {
+            if (!parseObject(scene, error, parent)) return false;
+            if (current_.type == TokenType::Comma) {
+                advance();
+            } else if (current_.type != TokenType::ArrayEnd) {
+                error = "Expected ',' or ']' in children array";
+                return false;
+            }
+        }
+
+        return expect(TokenType::ArrayEnd, error);
     }
 
     bool parseComponents(std::vector<std::unique_ptr<Component>>& out, std::string& error)
@@ -414,6 +434,50 @@ private:
 
 } // namespace
 
+// Recursive object writer. Flat objects (no children) serialize byte-for-byte
+// as before: the "children" field is omitted entirely. Children, if any, are
+// written in insertion order on a deeper-indented line.
+static void writeObject(std::ostream& out, const GameObject& obj, const std::string& indent)
+{
+    const Transform& t = obj.transform();
+    out << indent << "{ ";
+    out << "\"name\": \"" << obj.name() << "\", ";
+    out << "\"position\": [" << t.position.x << ", " << t.position.y << ", " << t.position.z << "], ";
+    out << "\"rotation\": [" << t.rotation.x << ", " << t.rotation.y << ", " << t.rotation.z << "], ";
+    out << "\"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "], ";
+    out << "\"components\": [";
+
+    bool firstComp = true;
+    for (const auto& comp : obj.components()) {
+        if (auto* mesh = dynamic_cast<const MeshRenderer*>(comp.get())) {
+            if (!firstComp) out << ", ";
+            firstComp = false;
+            out << "{\"type\": \"MeshRenderer\", ";
+            out << "\"mesh\": \"" << mesh->mesh << "\", ";
+            out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
+        } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
+            if (!firstComp) out << ", ";
+            firstComp = false;
+            out << "{\"type\": \"RotateComponent\", ";
+            out << "\"angularVelocity\": [" << rot->angularVelocityEuler.x << ", " << rot->angularVelocityEuler.y << ", " << rot->angularVelocityEuler.z << "]}";
+        }
+    }
+
+    out << "]";
+    if (!obj.children().empty()) {
+        out << ", \"children\": [\n";
+        const std::string childIndent = indent + "    ";
+        bool firstChild = true;
+        for (const GameObject* child : obj.children()) {
+            if (!firstChild) out << ",\n";
+            firstChild = false;
+            writeObject(out, *child, childIndent);
+        }
+        out << "\n" << indent << "]";
+    }
+    out << " }";
+}
+
 bool save(const Scene& scene, const std::string& path, std::string& error)
 {
     std::filesystem::path filePath(path);
@@ -439,37 +503,17 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
         if (scene.isCamera(obj.get())) {
             continue;
         }
+        if (obj->parent() != nullptr) {
+            // Children are serialized nested under their parent; skip them here.
+            continue;
+        }
 
         if (!first) {
             out << ",\n";
         }
         first = false;
 
-        const Transform& t = obj->transform();
-        out << "    { ";
-        out << "\"name\": \"" << obj->name() << "\", ";
-        out << "\"position\": [" << t.position.x << ", " << t.position.y << ", " << t.position.z << "], ";
-        out << "\"rotation\": [" << t.rotation.x << ", " << t.rotation.y << ", " << t.rotation.z << "], ";
-        out << "\"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "], ";
-        out << "\"components\": [";
-
-        bool firstComp = true;
-        for (const auto& comp : obj->components()) {
-            if (auto* mesh = dynamic_cast<const MeshRenderer*>(comp.get())) {
-                if (!firstComp) out << ", ";
-                firstComp = false;
-                out << "{\"type\": \"MeshRenderer\", ";
-                out << "\"mesh\": \"" << mesh->mesh << "\", ";
-                out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
-            } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
-                if (!firstComp) out << ", ";
-                firstComp = false;
-                out << "{\"type\": \"RotateComponent\", ";
-                out << "\"angularVelocity\": [" << rot->angularVelocityEuler.x << ", " << rot->angularVelocityEuler.y << ", " << rot->angularVelocityEuler.z << "]}";
-            }
-        }
-
-        out << "] }";
+        writeObject(out, *obj, "    ");
     }
 
     out << "\n  ]\n";

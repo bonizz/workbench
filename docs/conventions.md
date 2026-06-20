@@ -69,6 +69,13 @@ everywhere:
   private `kRadToDeg`. Prefer the shared one in new code; do not refactor the
   duplicates unless that is the task.
 - Renderer uses reversed-Z perspective (`core/math.cpp`).
+- **Transform hierarchy (local vs world).** `Transform` fields are **local** to
+  the object's parent; the **world** matrix is a derived cache refreshed by
+  `Scene::updateWorldTransforms()` (DFS from roots). Authoring commands
+  (`transform.set_position`, the inspector) edit local fields. Rendering uses
+  `worldMatrix()`. `assert.position` checks local; `assert.world_position`
+  checks world. The camera cannot be a parent or child. Delete/duplicate
+  cascade the whole subtree. See `docs/scenes.md`.
 
 When in doubt about a rotation's effect, derive it from `math.cpp`'s matrix
 functions, or write a tiny standalone check.

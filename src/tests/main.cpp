@@ -1142,6 +1142,452 @@ int main()
         assert(result.output.find("assert.color") != std::string::npos);
     }
 
+    // ===== Milestone 0.6: Transform Hierarchy =====
+
+    // setParent basics + invariants.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A");
+        GameObject* b = scene.createObject("B");
+
+        assert(scene.setParent(a, b));
+        assert(a->parent() == b);
+        assert(b->children().size() == 1);
+        assert(b->children()[0] == a);
+        assert(a->children().empty());
+    }
+
+    // Idempotent re-parenting to the same parent is a success no-op.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A");
+        GameObject* b = scene.createObject("B");
+
+        assert(scene.setParent(a, b));
+        assert(scene.setParent(a, b));
+        assert(b->children().size() == 1);
+        assert(b->children()[0] == a);
+    }
+
+    // detach / setParent(child, nullptr).
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A");
+        GameObject* b = scene.createObject("B");
+
+        assert(scene.setParent(a, b));
+        assert(scene.setParent(a, nullptr));
+        assert(a->parent() == nullptr);
+        assert(b->children().empty());
+    }
+
+    // Cycle guard: after A under B, parenting B under A is rejected and unchanged.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A");
+        GameObject* b = scene.createObject("B");
+
+        assert(scene.setParent(a, b));
+        assert(!scene.setParent(b, a));
+        // Hierarchy unchanged.
+        assert(a->parent() == b);
+        assert(b->parent() == nullptr);
+        assert(b->children().size() == 1);
+        assert(b->children()[0] == a);
+    }
+
+    // Deeper cycle guard: A->B->C, then C under A rejected.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A");
+        GameObject* b = scene.createObject("B");
+        GameObject* c = scene.createObject("C");
+
+        assert(scene.setParent(b, a));   // a -> b
+        assert(scene.setParent(c, b));   // a -> b -> c
+        assert(!scene.setParent(a, c)); // would cycle
+        assert(a->parent() == nullptr);
+    }
+
+    // Camera guard: camera cannot be parent or child.
+    {
+        Scene scene;
+        Camera* cam = scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* x = scene.createObject("X");
+
+        assert(!scene.setParent(cam, x));
+        assert(!scene.setParent(x, cam));
+        assert(cam->parent() == nullptr);
+        assert(cam->children().empty());
+        assert(x->parent() == nullptr);
+    }
+
+    // updateWorldTransforms: parent translates, child local offset composes.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        parent->transform().position = {2.0f, 0.0f, 0.0f};
+        child->transform().position = {1.0f, 0.0f, 0.0f};
+        assert(scene.setParent(child, parent));
+
+        scene.updateWorldTransforms();
+        const Mat4& wm = child->transform().worldMatrix();
+        assert(std::fabs(wm.columns[3][0] - 3.0f) < 1e-4f);
+        assert(std::fabs(wm.columns[3][1] - 0.0f) < 1e-4f);
+        assert(std::fabs(wm.columns[3][2] - 0.0f) < 1e-4f);
+    }
+
+    // Reparenting violates objects_ order (child A has a lower id than parent B)
+    // but DFS-from-roots still computes the correct world transform.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("A"); // id 2
+        GameObject* b = scene.createObject("B"); // id 3
+        b->transform().position = {2.0f, 0.0f, 0.0f};
+        a->transform().position = {1.0f, 0.0f, 0.0f};
+        assert(scene.setParent(a, b)); // A (lower id) is child of B
+
+        scene.updateWorldTransforms();
+        const Mat4& wm = a->transform().worldMatrix();
+        assert(std::fabs(wm.columns[3][0] - 3.0f) < 1e-4f);
+    }
+
+    // RotateComponent on a parent orbits a child's world position.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* pivot = scene.createObject("Pivot");
+        GameObject* arm = scene.createObject("Arm");
+        arm->transform().position = {1.0f, 0.0f, 0.0f};
+        assert(scene.setParent(arm, pivot));
+
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {0.0f, 90.0f, 0.0f};
+        pivot->addComponent(std::move(rot));
+
+        scene.update(1.0f); // parent rotates 90° about Y; world refreshes after
+        const Mat4& wm = arm->transform().worldMatrix();
+        // Ry(90°) * (1,0,0) = (0,0,1)
+        assert(std::fabs(wm.columns[3][0] - 0.0f) < 1e-4f);
+        assert(std::fabs(wm.columns[3][1] - 0.0f) < 1e-4f);
+        assert(std::fabs(wm.columns[3][2] - 1.0f) < 1e-4f);
+    }
+
+    // deleteObject cascades over the whole subtree.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        GameObject* grand = scene.createObject("Grand");
+        scene.setParent(child, parent);
+        scene.setParent(grand, child);
+        assert(scene.objects().size() == 4); // camera + 3
+
+        assert(scene.deleteObject(parent));
+        assert(scene.objects().size() == 1); // camera only
+        assert(scene.findObjectById(parent->id().value) == nullptr);
+        assert(scene.findObjectById(child->id().value) == nullptr);
+        assert(scene.findObjectById(grand->id().value) == nullptr);
+    }
+
+    // duplicateObject cascades the subtree.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        parent->transform().position = {2.0f, 0.0f, 0.0f};
+        parent->addComponent(std::make_unique<MeshRenderer>());
+        GameObject* child = scene.createObject("Child");
+        child->transform().position = {1.0f, 0.0f, 0.0f};
+        scene.setParent(child, parent);
+
+        GameObject* copy = scene.duplicateObject(parent);
+        assert(copy != nullptr);
+        assert(copy->name() == "Parent Copy");
+        assert(copy->transform().position.x == 2.0f);
+        assert(copy->hasComponent<MeshRenderer>());
+        assert(copy->children().size() == 1);
+        GameObject* copiedChild = copy->children()[0];
+        assert(copiedChild->name() == "Child"); // child name preserved
+        assert(copiedChild->parent() == copy);
+        assert(copiedChild->transform().position.x == 1.0f);
+        assert(scene.objects().size() == 5); // camera + 2 parents + 2 children
+    }
+
+    // Serialization round-trip with nested children.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        parent->transform().position = {5.0f, 0.0f, 0.0f};
+        parent->addComponent(std::make_unique<MeshRenderer>());
+        GameObject* child = scene.createObject("Child");
+        child->transform().position = {1.0f, 0.0f, 0.0f};
+        scene.setParent(child, parent);
+
+        const char* path = "build/tests/hierarchy_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        assert(SceneSerializer::load(loaded, path, error));
+        assert(loaded.objects().size() == 3); // camera + parent + child
+
+        // Find parent and child by name in the loaded scene.
+        GameObject* lparent = nullptr;
+        GameObject* lchild = nullptr;
+        for (const auto& o : loaded.objects()) {
+            if (o->name() == "Parent") lparent = o.get();
+            if (o->name() == "Child") lchild = o.get();
+        }
+        assert(lparent != nullptr);
+        assert(lchild != nullptr);
+        assert(lchild->parent() == lparent);
+        assert(lparent->children().size() == 1);
+        assert(lparent->children()[0] == lchild);
+        assert(lparent->transform().position.x == 5.0f);
+        assert(lchild->transform().position.x == 1.0f);
+        assert(lparent->hasComponent<MeshRenderer>());
+
+        // World position composes after load.
+        loaded.updateWorldTransforms();
+        const Mat4& wm = lchild->transform().worldMatrix();
+        assert(std::fabs(wm.columns[3][0] - 6.0f) < 1e-4f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Serialization backward compatibility: a flat scene writes no "children" field.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* a = scene.createObject("Solo");
+        a->transform().position = {1.0f, 2.0f, 3.0f};
+
+        const char* path = "build/tests/flat_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+
+        std::ifstream in(path);
+        std::string content((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+        assert(content.find("children") == std::string::npos);
+        assert(content.find("\"name\": \"Solo\"") != std::string::npos);
+
+        std::filesystem::remove(path);
+    }
+
+    // DebugState: Hierarchy section, parent: and worldPosition: lines.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        child->transform().position = {1.0f, 0.0f, 0.0f};
+        scene.setParent(child, parent);
+
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr);
+        assert(text.find("Hierarchy:") != std::string::npos);
+        // Tree indentation: child is deeper than parent.
+        assert(text.find("[2] Parent\n    [3] Child") != std::string::npos);
+        assert(text.find("parent: Parent [2]") != std::string::npos);
+        assert(text.find("parent: none") != std::string::npos);
+        assert(text.find("worldPosition:") != std::string::npos);
+    }
+
+    // scene.set_parent command: success + each documented error.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        scene.createObject("A");
+        scene.createObject("B");
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("scene.set_parent A B", ctx);
+        assert(result.success);
+        assert(result.output.find("Parented") != std::string::npos);
+        assert(scene.findObjectById(2)->parent() == scene.findObjectById(3));
+
+        // Missing objects.
+        result = executeCommand("scene.set_parent Nope B", ctx);
+        assert(!result.success);
+        result = executeCommand("scene.set_parent A Nope", ctx);
+        assert(!result.success);
+
+        // Same object.
+        result = executeCommand("scene.set_parent A A", ctx);
+        assert(!result.success);
+
+        // Cycle: B is under... create C, A->B, B->C, then C->A must fail.
+        scene.createObject("C");
+        executeCommand("scene.set_parent B C", ctx); // A under B under C
+        result = executeCommand("scene.set_parent C A", ctx);
+        assert(!result.success);
+        assert(result.output.find("cycle") != std::string::npos);
+
+        // Camera as parent / child.
+        result = executeCommand("scene.set_parent A Camera", ctx);
+        assert(!result.success);
+        result = executeCommand("scene.set_parent Camera A", ctx);
+        assert(!result.success);
+    }
+
+    // scene.detach, scene.get_parent, scene.get_children commands.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        scene.setParent(child, parent);
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        // get_parent (named).
+        AgentCommandResult result = executeCommand("scene.get_parent Child", ctx);
+        assert(result.success);
+        assert(result.output.find("Parent: Parent") != std::string::npos);
+        result = executeCommand("scene.get_parent Parent", ctx);
+        assert(result.success);
+        assert(result.output == "Parent: none");
+
+        // get_children.
+        result = executeCommand("scene.get_children Parent", ctx);
+        assert(result.success);
+        assert(result.output.find("Child") != std::string::npos);
+        result = executeCommand("scene.get_children Child", ctx);
+        assert(result.success);
+        assert(result.output.find("Children: none") != std::string::npos);
+
+        // detach.
+        result = executeCommand("scene.detach Child", ctx);
+        assert(result.success);
+        assert(child->parent() == nullptr);
+        assert(parent->children().empty());
+
+        // detach a root is a no-op success.
+        result = executeCommand("scene.detach Child", ctx);
+        assert(result.success);
+        assert(result.output.find("already a root") != std::string::npos);
+
+        // Errors.
+        result = executeCommand("scene.detach Nope", ctx);
+        assert(!result.success);
+        result = executeCommand("scene.detach Camera", ctx);
+        assert(!result.success);
+        result = executeCommand("scene.get_parent Nope", ctx);
+        assert(!result.success);
+    }
+
+    // assert.parent: matching, none, and failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        scene.setParent(child, parent);
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.parent Child Parent", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        result = executeCommand("assert.parent Parent none", ctx);
+        assert(result.success);
+
+        // Mismatch (named).
+        lastFailure.clear();
+        result = executeCommand("assert.parent Child none", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected parent: none") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Mismatch (none vs actual).
+        lastFailure.clear();
+        result = executeCommand("assert.parent Parent Child", ctx);
+        assert(!result.success);
+        assert(result.output.find("Actual parent: none") != std::string::npos);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.parent Nope Parent", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+    }
+
+    // assert.world_position: success, failure, and composition.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        GameObject* child = scene.createObject("Child");
+        parent->transform().position = {2.0f, 0.0f, 0.0f};
+        child->transform().position = {1.0f, 0.0f, 0.0f};
+        scene.setParent(child, parent); // world x = 3
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.world_position Child 3 0 0", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Failure with tolerance.
+        lastFailure.clear();
+        result = executeCommand("assert.world_position Child 9 0 0 0.01", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected world position: 9.0000") != std::string::npos);
+        assert(result.output.find("Actual world position:   3.0000") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Loose tolerance passes.
+        result = executeCommand("assert.world_position Child 3.4 0 0 1.0", ctx);
+        assert(result.success);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.world_position Nope 0 0 0", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+    }
+
+    // New hierarchy commands appear in command discovery and have help.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("agent.commands", ctx);
+        assert(result.success);
+        assert(result.output.find("scene.set_parent") != std::string::npos);
+        assert(result.output.find("scene.detach") != std::string::npos);
+        assert(result.output.find("scene.get_parent") != std::string::npos);
+        assert(result.output.find("scene.get_children") != std::string::npos);
+        assert(result.output.find("assert.parent") != std::string::npos);
+        assert(result.output.find("assert.world_position") != std::string::npos);
+
+        result = executeCommand("agent.help scene.set_parent", ctx);
+        assert(result.success);
+        assert(result.output.find("scene.set_parent <childName> <parentName>") != std::string::npos);
+
+        result = executeCommand("agent.help assert.world_position", ctx);
+        assert(result.success);
+        assert(result.output.find("assert.world_position <name>") != std::string::npos);
+    }
+
     std::printf("All tests passed.\n");
     return 0;
 }

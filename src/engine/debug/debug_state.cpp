@@ -35,6 +35,12 @@ Vec3 toDegrees(const Vec3& radians)
     return {radians.x * kRadToDeg, radians.y * kRadToDeg, radians.z * kRadToDeg};
 }
 
+Vec3 worldPositionOf(const GameObject* obj)
+{
+    const Mat4& m = obj->transform().worldMatrix();
+    return {m.columns[3][0], m.columns[3][1], m.columns[3][2]};
+}
+
 std::vector<const GameObject*> sortedObjects(const Scene& scene)
 {
     std::vector<const GameObject*> result;
@@ -48,19 +54,41 @@ std::vector<const GameObject*> sortedObjects(const Scene& scene)
     return result;
 }
 
+void writeHierarchyNode(std::ostringstream& out, const GameObject* obj, int depth)
+{
+    for (int i = 0; i <= depth; ++i) out << "  ";
+    out << "[" << obj->id().value << "] " << obj->name() << "\n";
+    for (const GameObject* child : obj->children()) {
+        writeHierarchyNode(out, child, depth + 1);
+    }
+}
+
+void writeHierarchy(std::ostringstream& out, const Scene& scene)
+{
+    out << "Hierarchy:\n";
+    for (const auto& root : scene.objects()) {
+        if (root->parent() == nullptr) {
+            writeHierarchyNode(out, root.get(), 0);
+        }
+    }
+}
+
 } // namespace
 
 std::string build(uint64_t frame,
                   float fps,
                   float frameTimeMs,
                   size_t renderCommandCount,
-                  const Scene& scene,
+                  Scene& scene,
                   const GameObject* selected,
                   const std::string& lastScriptPath,
                   const std::string& lastCapturePath,
                   const std::string& lastBundlePath,
                   const std::string* lastAssertionFailure)
 {
+    // Refresh derived world matrices first so worldPosition values are accurate.
+    scene.updateWorldTransforms();
+
     std::ostringstream out;
     out << std::fixed << std::setprecision(1);
 
@@ -88,9 +116,15 @@ std::string build(uint64_t frame,
     out << "Scene:\n";
     for (const GameObject* obj : sortedObjects(scene)) {
         out << "[" << obj->id().value << "] " << obj->name() << "\n";
+        if (const GameObject* p = obj->parent()) {
+            out << "  parent: " << p->name() << " [" << p->id().value << "]\n";
+        } else {
+            out << "  parent: none\n";
+        }
         out << "  position: " << formatVec3(obj->transform().position) << "\n";
         out << "  rotation: " << formatVec3(toDegrees(obj->transform().rotation)) << "\n";
         out << "  scale:    " << formatVec3(obj->transform().scale) << "\n";
+        out << "  worldPosition: " << formatVec3(worldPositionOf(obj)) << "\n";
         out << "  components: ";
         if (obj->components().empty()) {
             out << "none";
@@ -107,6 +141,9 @@ std::string build(uint64_t frame,
         }
         out << "\n\n";
     }
+
+    writeHierarchy(out, scene);
+    out << "\n";
 
     out << "Editor:\n";
     if (selected) {

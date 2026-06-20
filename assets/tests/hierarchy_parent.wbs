@@ -1,0 +1,9 @@
+scene.create_cube Parent
+transform.set_position 2 0 0 0
+scene.create_cube Child
+transform.set_position 3 2 0 0
+scene.set_parent Child Parent
+assert.parent Child Parent
+assert.world_position Child 1 0 0
+transform.set_position 2 1 2 3
+assert.world_position Child 2 2 3

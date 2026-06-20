@@ -32,8 +32,9 @@ public:
 
 private:
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
+    void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();
-    void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene);
+    void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, Scene& scene);
     void drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
     void drawScriptRunner(Scene& scene);
     void drawScreenshotPanel(Scene& scene);

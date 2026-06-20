@@ -107,6 +107,11 @@ public:
 
 `onUpdate(dt)` adds `angularVelocityEuler * dt` to `Transform::rotation`.
 
+Because components edit the **local** transform fields, a `RotateComponent` on
+a parent automatically orbits the world positions of its children — world
+transforms are recomputed every frame after `Scene::update`. See
+`docs/scenes.md` for local-vs-world semantics.
+
 ### Units (important)
 
 - `Transform::rotation` is stored in **radians** (see `docs/scenes.md`, `DebugState`).

@@ -110,6 +110,26 @@ The companion numeric assertions follow the same shape and tolerance rules:
 `assert.color` requires a `MeshRenderer`; an object without one is an assertion
 failure with the message `Object '<name>' has no MeshRenderer component.`
 
+### Hierarchy tests
+
+The transform hierarchy is covered by `assets/tests/hierarchy_parent.wbs`,
+`hierarchy_rotate.wbs`, and `hierarchy_detach.wbs`. They rely on two name-based
+assertions:
+
+- `assert.parent <childName> <parentName|none>` — checks the parent by name
+  (the literal `none` means "is a root").
+- `assert.world_position <name> <x> <y> <z> [tolerance]` — checks the
+  composed WORLD position (since `transform.set_position` only edits the LOCAL
+  field, which does not change when a parent moves).
+
+`hierarchy_rotate.wbs` is the headline test: a `RotateComponent` on a parent
+orbits its child's world position after `sim.step`, proving world transforms
+compose deterministically.
+
+The cycle guard is exercised by the intentionally failing
+`assets/tests/examples/hierarchy_cycle_fail.wbs` (excluded from the suite, like
+the other `*_fail.wbs` examples).
+
 The newer rotator and simulation commands are **name-based** so tests do not depend on runtime `ObjectIds`, which are reassigned on load and differ across runs.
 
 ### Failure-path tests

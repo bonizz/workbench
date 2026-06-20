@@ -95,21 +95,33 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(260, 200), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(260, 260), ImGuiCond_FirstUseEver);
     ImGui::Begin("Hierarchy");
 
     ImGui::Text("%.1f FPS  %.2f ms", fps, frameTimeMs);
     ImGui::Separator();
 
+    // Recursive tree: roots in objects_ order, children in insertion order.
     for (const auto& obj : scene.objects()) {
-        ImGui::PushID(obj.get());
-        bool isSelected = (selected_ == obj.get());
-        const std::string& name = obj->name();
-        if (ImGui::Selectable(name.c_str(), isSelected)) {
-            selected_ = obj.get();
-            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", name.c_str());
+        if (obj->parent() == nullptr) {
+            drawHierarchyNode(scene, obj.get());
         }
-        ImGui::PopID();
+    }
+
+    // Empty-area drop zone: dropping an object here detaches it (makes a root).
+    {
+        ImVec2 remaining = ImGui::GetContentRegionAvail();
+        if (remaining.y < 40.0f) remaining.y = 40.0f;
+        ImGui::InvisibleButton("##detach_zone", ImVec2(-FLT_MIN, remaining.y));
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("GAMEOBJECT")) {
+                if (p->DataSize == sizeof(GameObject*)) {
+                    GameObject* dragged = *static_cast<GameObject**>(p->Data);
+                    scene.setParent(dragged, nullptr);
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
 
     ImGui::Separator();
@@ -145,7 +157,64 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
     }
     ImGui::EndDisabled();
 
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!(canModifySelection && selected_->parent() != nullptr));
+    if (ImGui::Button("Detach")) {
+        scene.setParent(selected_, nullptr);
+    }
+    ImGui::EndDisabled();
+
     ImGui::End();
+}
+
+void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)
+{
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
+                             | ImGuiTreeNodeFlags_SpanAvailWidth;
+    bool isLeaf = obj->children().empty();
+    if (isLeaf || scene.isCamera(obj)) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet;
+    }
+    if (selected_ == obj) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+
+    bool nodeOpen = ImGui::TreeNodeEx(obj, flags, "%s", obj->name().c_str());
+
+    // Click anywhere on the node selects it.
+    if (ImGui::IsItemClicked()) {
+        selected_ = obj;
+        std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+    }
+
+    // Drag source (the camera is not draggable).
+    if (!scene.isCamera(obj) && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        GameObject* payload = obj;
+        ImGui::SetDragDropPayload("GAMEOBJECT", &payload, sizeof(payload));
+        ImGui::Text("%s", obj->name().c_str());
+        ImGui::EndDragDropSource();
+    }
+
+    // Drop target: reparent the dragged object onto this one. Scene validates
+    // cycles and the camera; invalid drops are simply ignored.
+    if (!scene.isCamera(obj) && ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("GAMEOBJECT")) {
+            if (p->DataSize == sizeof(GameObject*)) {
+                GameObject* dragged = *static_cast<GameObject**>(p->Data);
+                if (dragged != obj) {
+                    scene.setParent(dragged, obj);
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    if (nodeOpen) {
+        for (GameObject* child : obj->children()) {
+            drawHierarchyNode(scene, child);
+        }
+        ImGui::TreePop();
+    }
 }
 
 void Editor::drawInspector()
@@ -165,6 +234,15 @@ void Editor::drawInspector()
     if (ImGui::InputText("Name", nameBuffer_, sizeof(nameBuffer_))) {
         selected_->setName(nameBuffer_);
     }
+
+    // Read-only hierarchy readout (local authoring stays in Transform below).
+    if (GameObject* p = selected_->parent()) {
+        ImGui::Text("Parent: %s", p->name().c_str());
+    } else {
+        ImGui::TextDisabled("Parent: (root)");
+    }
+    const Mat4& wm = selected_->transform().worldMatrix();
+    ImGui::Text("World Pos: %.2f, %.2f, %.2f", wm.columns[3][0], wm.columns[3][1], wm.columns[3][2]);
 
     ImGui::Separator();
     ImGui::Text("Transform");
@@ -333,7 +411,7 @@ void Editor::drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float
     ImGui::End();
 }
 
-void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene)
+void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 490), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(260, 120), ImGuiCond_FirstUseEver);

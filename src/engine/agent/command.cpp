@@ -425,6 +425,111 @@ AgentCommandResult cmdSceneDuplicate(const std::vector<std::string>& args,
     return makeSuccess(oss.str());
 }
 
+// Hierarchy commands are name-based (stable across load). Camera is excluded
+// from both parent and child roles.
+AgentCommandResult cmdSceneSetParent(const std::vector<std::string>& args,
+                                    AgentCommandContext& ctx)
+{
+    if (args.size() < 3) {
+        return makeError("Usage: scene.set_parent <childName> <parentName>");
+    }
+    const std::string& childName = args[1];
+    const std::string& parentName = args[2];
+
+    GameObject* child = findObjectByName(ctx.scene, childName);
+    if (!child) {
+        return makeError("Object not found: " + childName);
+    }
+    GameObject* parent = findObjectByName(ctx.scene, parentName);
+    if (!parent) {
+        return makeError("Object not found: " + parentName);
+    }
+    if (ctx.scene.isCamera(child)) {
+        return makeError("The camera cannot be a child");
+    }
+    if (ctx.scene.isCamera(parent)) {
+        return makeError("The camera cannot be a parent");
+    }
+    if (child == parent) {
+        return makeError("Cannot parent an object under itself");
+    }
+    // Only remaining setParent failure is a cycle.
+    if (!ctx.scene.setParent(child, parent)) {
+        return makeError("Cannot parent '" + childName + "' under '" + parentName
+                         + "' (would create a cycle)");
+    }
+
+    std::ostringstream oss;
+    oss << "Parented " << child->name() << " [" << child->id().value
+        << "] under " << parent->name() << " [" << parent->id().value << "]";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSceneDetach(const std::vector<std::string>& args,
+                                  AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.detach <name>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    if (ctx.scene.isCamera(obj)) {
+        return makeError("The camera cannot be detached");
+    }
+    if (!obj->parent()) {
+        return makeSuccess(obj->name() + " is already a root");
+    }
+    ctx.scene.setParent(obj, nullptr);
+    return makeSuccess("Detached " + obj->name() + " [" + std::to_string(obj->id().value) + "]");
+}
+
+AgentCommandResult cmdSceneGetParent(const std::vector<std::string>& args,
+                                     AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.get_parent <name>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    std::ostringstream oss;
+    if (GameObject* p = obj->parent()) {
+        oss << "Parent: " << p->name() << " [" << p->id().value << "]";
+    } else {
+        oss << "Parent: none";
+    }
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSceneGetChildren(const std::vector<std::string>& args,
+                                       AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.get_children <name>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    std::ostringstream oss;
+    const auto& kids = obj->children();
+    if (kids.empty()) {
+        oss << "Children: none";
+    } else {
+        oss << "Children:\n";
+        for (const GameObject* c : kids) {
+            oss << c->name() << " [" << c->id().value << "]\n";
+        }
+    }
+    return makeSuccess(oss.str());
+}
+
 AgentCommandResult cmdSceneSave(const std::vector<std::string>& args,
                                 AgentCommandContext& ctx)
 {
@@ -867,6 +972,92 @@ AgentCommandResult cmdAssertHasComponent(const std::vector<std::string>& args,
     return makeAssertionFailure(ctx, name + " does not have component " + type);
 }
 
+AgentCommandResult cmdAssertParent(const std::vector<std::string>& args,
+                                   AgentCommandContext& ctx)
+{
+    if (args.size() < 3) {
+        return makeError("Usage: assert.parent <childName> <parentName|none>");
+    }
+    const std::string& childName = args[1];
+    const std::string& expected = args[2];
+
+    GameObject* child = findObjectByName(ctx.scene, childName);
+    if (!child) {
+        return makeAssertionFailure(ctx, "Object not found: " + childName);
+    }
+
+    GameObject* actual = child->parent();
+    if (expected == "none") {
+        if (actual == nullptr) {
+            return makeSuccess("OK");
+        }
+        return makeAssertionFailure(ctx, "Expected parent: none\nActual parent: "
+                                    + actual->name() + " [" + std::to_string(actual->id().value) + "]");
+    }
+
+    if (actual == nullptr) {
+        return makeAssertionFailure(ctx, "Expected parent: " + expected + "\nActual parent: none");
+    }
+    if (actual->name() == expected) {
+        return makeSuccess("OK");
+    }
+    return makeAssertionFailure(ctx, "Expected parent: " + expected + "\nActual parent: "
+                                + actual->name() + " [" + std::to_string(actual->id().value) + "]");
+}
+
+AgentCommandResult cmdAssertWorldPosition(const std::vector<std::string>& args,
+                                          AgentCommandContext& ctx)
+{
+    if (args.size() < 5) {
+        return makeError("Usage: assert.world_position <name> <x> <y> <z> [tolerance]");
+    }
+
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeAssertionFailure(ctx, "Object not found: " + name);
+    }
+
+    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
+    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
+        return makeError("Invalid position values");
+    }
+
+    float tolerance = 0.01f;
+    if (args.size() >= 6) {
+        if (!parseFloat(args[5], tolerance)) {
+            return makeError("Invalid tolerance: " + args[5]);
+        }
+        if (tolerance < 0.0f) {
+            return makeError("Tolerance must be non-negative");
+        }
+    }
+
+    // Refresh defensively before reading the world matrix.
+    ctx.scene.updateWorldTransforms();
+    const Mat4& m = obj->transform().worldMatrix();
+    float ax = m.columns[3][0];
+    float ay = m.columns[3][1];
+    float az = m.columns[3][2];
+
+    auto near = [](float a, float b, float tol) {
+        return std::fabs(a - b) <= tol;
+    };
+
+    if (near(ax, ex, tolerance) && near(ay, ey, tolerance) && near(az, ez, tolerance)) {
+        return makeSuccess("OK");
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(4);
+    oss << "Expected world position: " << ex << ", " << ey << ", " << ez << "\n";
+    oss << "Actual world position:   " << ax << ", " << ay << ", " << az;
+    if (args.size() >= 6) {
+        oss << " (tolerance " << tolerance << ")";
+    }
+    return makeAssertionFailure(ctx, oss.str());
+}
+
 const std::vector<CommandEntry>& commandTable();
 
 AgentCommandResult cmdAgentCommands(const std::vector<std::string>&,
@@ -955,6 +1146,26 @@ const std::vector<CommandEntry>& commandTable()
           "Duplicates a GameObject by ObjectId.",
           "scene.duplicate 2"},
          cmdSceneDuplicate},
+        {{"scene.set_parent",
+          "scene.set_parent <childName> <parentName>",
+          "Parents a named GameObject under another named GameObject. Camera excluded.",
+          "scene.set_parent Child Parent"},
+         cmdSceneSetParent},
+        {{"scene.detach",
+          "scene.detach <name>",
+          "Makes a named GameObject a root (detaches it from its parent).",
+          "scene.detach Child"},
+         cmdSceneDetach},
+        {{"scene.get_parent",
+          "scene.get_parent <name>",
+          "Shows the parent of a named GameObject (or none).",
+          "scene.get_parent Child"},
+         cmdSceneGetParent},
+        {{"scene.get_children",
+          "scene.get_children <name>",
+          "Lists the children of a named GameObject.",
+          "scene.get_children Parent"},
+         cmdSceneGetChildren},
         {{"scene.save",
           "scene.save <filename>",
           "Saves authored objects to assets/scenes/<filename>.",
@@ -1040,6 +1251,16 @@ const std::vector<CommandEntry>& commandTable()
           "Asserts that a GameObject has a specific component.",
           "assert.has_component Cube MeshRenderer"},
          cmdAssertHasComponent},
+        {{"assert.parent",
+          "assert.parent <childName> <parentName|none>",
+          "Asserts a named child's parent (by name), or 'none' if it is a root.",
+          "assert.parent Child Parent"},
+         cmdAssertParent},
+        {{"assert.world_position",
+          "assert.world_position <name> <x> <y> <z> [tolerance]",
+          "Asserts a named GameObject's WORLD-space position (default tolerance 0.01).",
+          "assert.world_position Child 1 0 0"},
+         cmdAssertWorldPosition},
         {{"assert.rotation",
           "assert.rotation <name> <x> <y> <z> [tolerance]",
           "Asserts a named GameObject's Euler rotation in degrees (default tolerance 0.01).",

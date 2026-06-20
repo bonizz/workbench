@@ -1,0 +1,9 @@
+scene.create_cube Pivot
+transform.set_position 2 0 0 0
+scene.create_cube Arm
+transform.set_position 3 1 0 0
+scene.set_parent Arm Pivot
+component.add_rotator Pivot
+component.set_rotator Pivot 0 90 0
+sim.step 1.0
+assert.world_position Arm 0 0 0.5 0.0001

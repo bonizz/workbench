@@ -10,11 +10,17 @@ namespace DebugState {
 
 // Builds a deterministic, human-readable snapshot of engine state.
 // Intended for agent inspection and bug reporting.
+// Takes a non-const Scene so it can refresh derived world matrices first;
+// all callers already hold a non-const Scene.
+//
+// NOTE: the output format is effectively an API. Several unit tests search it
+// by substring and one does an exact round-trip, so changes must be ADDITIVE
+// (never reorder/rename existing lines). See docs/conventions.md §7.
 std::string build(uint64_t frame,
                   float fps,
                   float frameTimeMs,
                   size_t renderCommandCount,
-                  const Scene& scene,
+                  Scene& scene,
                   const GameObject* selected,
                   const std::string& lastScriptPath = {},
                   const std::string& lastCapturePath = {},

@@ -54,6 +54,10 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `scene.duplicate <id>` | Duplicate the object with the given id. |
 | `scene.save <filename>` | Save authored objects to `assets/scenes/<filename>`. |
 | `scene.load <filename>` | Load authored objects from `assets/scenes/<filename>`. |
+| `scene.set_parent <childName> <parentName>` | Parent a named GameObject under another (name-based; camera excluded). |
+| `scene.detach <name>` | Make a named GameObject a root (detach from its parent). |
+| `scene.get_parent <name>` | Show a named GameObject's parent (or none). |
+| `scene.get_children <name>` | List a named GameObject's children. |
 | `component.list <id>` | List components attached to a GameObject. |
 | `component.add_mesh_renderer <id>` | Add a MeshRenderer component to a GameObject. |
 | `component.add_rotator <name>` | Add a RotateComponent (angular velocity 0,0,0) to a named GameObject. |
@@ -73,6 +77,8 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `assert.position <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's position (default tolerance 0.01). |
 | `assert.scale <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's scale (default tolerance 0.01). |
 | `assert.color <name> <r> <g> <b> <a> [tolerance]` | Assert a named GameObject's MeshRenderer color rgba (default tolerance 0.01). |
+| `assert.parent <childName> <parentName\|none>` | Assert a named child's parent (by name), or `none` if it is a root. |
+| `assert.world_position <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's WORLD-space position (default tolerance 0.01). |
 
 ## Command Discovery
 
@@ -113,6 +119,14 @@ Command behavior is covered by the existing `tests` executable:
 In **interactive mode** the simulation advances every frame, so behavior components such as `RotateComponent` animate live in the editor.
 
 In **automation mode** (`--run-script`, `--run-tests`, `--bundle`) the per-frame auto-advance is disabled. The simulation advances **only** when a script calls `sim.step [dt]`. This keeps scripts and tests deterministic: the same `sim.step` values always produce the same scene state. See `docs/components.md` for the exact update order.
+
+## Transforms: local vs world
+
+`transform.set_position` and the inspector edit an object's **local** transform
+(relative to its parent). The **world** transform is derived from the hierarchy.
+`assert.position` checks the local field; `assert.world_position` checks the
+composed world position. Use `assert.world_position` to verify parenting and
+orbit behavior. See `docs/scenes.md` for the full hierarchy model.
 
 ## Future MCP Direction
 

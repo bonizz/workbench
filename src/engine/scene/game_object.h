@@ -27,6 +27,11 @@ public:
     bool active() const { return active_; }
     void setActive(bool active) { active_ = active; }
 
+    // Hierarchy. Non-owning pointers; Scene is the sole mutator.
+    // See docs/plans/0.6_transform_hierarchy.md §3.
+    GameObject* parent() const { return parent_; }
+    const std::vector<GameObject*>& children() const { return children_; }
+
     // Component ownership.
     scene::Component* addComponent(std::unique_ptr<scene::Component> component);
 
@@ -47,6 +52,10 @@ private:
     Transform transform_;
     bool active_ = true;
     std::vector<std::unique_ptr<scene::Component>> components_;
+
+    friend class Scene;
+    GameObject* parent_ = nullptr;
+    std::vector<GameObject*> children_; // insertion order; deterministic
 };
 
 // Inline template definitions must be in the header because the type is not known here.
