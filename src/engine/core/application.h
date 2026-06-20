@@ -4,6 +4,8 @@
 #include "core/time.h"
 #include "scene/camera.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 
 class Window;
@@ -25,6 +27,9 @@ public:
     void onUpdate(float deltaTime);
     void onRender();
     void onResize(float width, float height, float scale);
+
+    uint64_t frame() const { return frame_; }
+    size_t lastRenderCommandCount() const { return lastRenderCommandCount_; }
 
     // Input events from the platform window.
     void onKeyEvent(int keyCode, bool down);
@@ -52,4 +57,7 @@ private:
 
     float fps_ = 0.0f;
     float frameTimeMs_ = 0.0f;
+
+    uint64_t frame_ = 0;
+    size_t lastRenderCommandCount_ = 0;
 };

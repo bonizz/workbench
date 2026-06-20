@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debug/debug_state.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
 
@@ -72,10 +73,11 @@ void Editor::render(void* commandBuffer, void* renderEncoder, void* renderPassDe
     }
 }
 
-void Editor::drawUI(Scene& scene, float fps, float frameTimeMs)
+void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
 {
     drawHierarchy(scene, fps, frameTimeMs);
     drawInspector();
+    drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
@@ -127,6 +129,25 @@ void Editor::drawInspector()
     ImGui::DragFloat3("Position", &position.x, 0.1f);
     ImGui::DragFloat3("Rotation", &rotation.x, 0.05f);
     ImGui::DragFloat3("Scale", &scale.x, 0.05f);
+
+    ImGui::End();
+}
+
+void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, const Scene& scene)
+{
+    ImGui::SetNextWindowPos(ImVec2(10, 490), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(260, 120), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Diagnostics");
+
+    if (ImGui::Button("Write Debug State")) {
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_);
+        DebugState::writeToFile(text);
+    }
+
+    if (ImGui::Button("Copy Debug State")) {
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_);
+        ImGui::SetClipboardText(text.c_str());
+    }
 
     ImGui::End();
 }

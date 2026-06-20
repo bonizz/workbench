@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 # We can revisit incremental builds once dependency tracking is solid.
 if [[ "${SKIP_CLEAN:-0}" != "1" ]]; then
     echo "Cleaning previous build artifacts..."
-    rm -rf build/obj build/debug build/release
+    rm -rf build/obj build/debug build/release build/tests
 fi
 
 echo "Generating build files..."

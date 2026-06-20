@@ -94,13 +94,16 @@ void Application::onUpdate(float deltaTime)
 
 void Application::onRender()
 {
+    ++frame_;
+
     editor_->beginFrame(window_->nativeView());
-    editor_->drawUI(*scene_, fps_, frameTimeMs_);
+    editor_->drawUI(*scene_, frame_, fps_, frameTimeMs_, lastRenderCommandCount_);
     editor_->endFrame();
 
     RenderContext ctx;
     ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
     scene_->buildRenderCommands(ctx);
+    lastRenderCommandCount_ = ctx.commands().size();
 
     renderer_->draw(ctx, clearColor_, [this](void* commandBuffer, void* renderEncoder, void* renderPassDescriptor) {
         editor_->render(commandBuffer, renderEncoder, renderPassDescriptor);

@@ -13,6 +13,9 @@ project "sandbox"
         "src/sandbox/main.mm",
         "src/engine/core/**.cpp",
         "src/engine/core/**.h",
+        "src/engine/debug/**.cpp",
+        "src/engine/debug/**.mm",
+        "src/engine/debug/**.h",
         "src/engine/platform/**.mm",
         "src/engine/platform/**.h",
         "src/engine/renderer/**.cpp",
@@ -50,3 +53,46 @@ project "sandbox"
 
     filter "configurations:Release"
         optimize "On"
+
+project "tests"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++20"
+    targetdir "build/tests/%{cfg.buildcfg:lower()}"
+    objdir "build/obj/tests"
+
+    files {
+        "src/tests/main.cpp",
+        "src/engine/core/math.cpp",
+        "src/engine/core/math.h",
+        "src/engine/core/object_id.h",
+        "src/engine/core/time.cpp",
+        "src/engine/core/time.h",
+        "src/engine/debug/debug_state.cpp",
+        "src/engine/debug/debug_state.h",
+        "src/engine/renderer/render_context.cpp",
+        "src/engine/renderer/render_context.h",
+        "src/engine/renderer/render_command.h",
+        "src/engine/scene/camera.cpp",
+        "src/engine/scene/camera.h",
+        "src/engine/scene/game_object.cpp",
+        "src/engine/scene/game_object.h",
+        "src/engine/scene/scene.cpp",
+        "src/engine/scene/scene.h",
+        "src/engine/scene/transform.cpp",
+        "src/engine/scene/transform.h"
+    }
+
+    system "macosx"
+    architecture "arm64"
+
+    includedirs { "src", "src/engine", "external" }
+
+    filter "configurations:Debug"
+        symbols "On"
+
+    filter "configurations:Release"
+        optimize "On"
+
+    filter {}
+
