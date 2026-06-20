@@ -1,0 +1,5 @@
+scene.create_cube Gyro
+component.add_rotator Gyro
+component.set_rotator Gyro 10 20 30
+sim.step 1.0
+assert.rotation Gyro 10 20 30

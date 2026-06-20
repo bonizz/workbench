@@ -9,13 +9,16 @@
 #include "debug/debug_state.h"
 #include "renderer/render_context.h"
 #include "scene/camera.h"
+#include "scene/component.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
+#include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/scene_serializer.h"
 #include "scene/transform.h"
 
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -785,6 +788,246 @@ int main()
         CliOptions opts = parseCliOptions(4, args);
         assert(opts.runScript.empty());
         assert(opts.bundleName == "name");
+    }
+
+    // Component lifecycle: onStart once, onUpdate each step.
+    {
+        // A tiny test component that records lifecycle transitions.
+        struct CountingComponent : scene::Component {
+            const char* typeName() const override { return "CountingComponent"; }
+            std::unique_ptr<Component> clone() const override { return std::make_unique<CountingComponent>(*this); }
+            void onStart() override { ++starts; }
+            void onUpdate(float) override { ++updates; }
+            int starts = 0;
+            int updates = 0;
+        };
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Obj");
+        obj->addComponent(std::make_unique<CountingComponent>());
+
+        CountingComponent* cc = obj->getComponent<CountingComponent>();
+        assert(cc->starts == 0);
+        assert(cc->updates == 0);
+
+        scene.update(0.1f);
+        assert(cc->starts == 1);
+        assert(cc->updates == 1);
+
+        scene.update(0.1f);
+        assert(cc->starts == 1);
+        assert(cc->updates == 2);
+    }
+
+    // Component lifecycle: inactive objects are skipped.
+    {
+        struct CountingComponent : scene::Component {
+            const char* typeName() const override { return "CountingComponent"; }
+            std::unique_ptr<Component> clone() const override { return std::make_unique<CountingComponent>(*this); }
+            void onUpdate(float) override { ++updates; }
+            int updates = 0;
+        };
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Obj");
+        obj->setActive(false);
+        obj->addComponent(std::make_unique<CountingComponent>());
+
+        CountingComponent* cc = obj->getComponent<CountingComponent>();
+        scene.update(0.1f);
+        scene.update(0.1f);
+        assert(cc->updates == 0);
+    }
+
+    // RotateComponent defaults and typeName.
+    {
+        scene::RotateComponent rot;
+        assert(std::string(rot.typeName()) == "RotateComponent");
+        assert(rot.angularVelocityEuler.x == 0.0f);
+        assert(rot.angularVelocityEuler.y == 0.0f);
+        assert(rot.angularVelocityEuler.z == 0.0f);
+    }
+
+    // RotateComponent::onUpdate advances rotation in radians from deg/s.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {0.0f, 90.0f, 0.0f};
+        obj->addComponent(std::move(rot));
+
+        scene.update(1.0f);
+        float expectedY = 90.0f * kDegToRad;
+        assert(std::fabs(obj->transform().rotation.y - expectedY) < 1e-4f);
+        assert(obj->transform().rotation.x == 0.0f);
+        assert(obj->transform().rotation.z == 0.0f);
+
+        scene.update(1.0f);
+        assert(std::fabs(obj->transform().rotation.y - 2.0f * expectedY) < 1e-4f);
+    }
+
+    // RotateComponent::clone preserves angular velocity.
+    {
+        scene::RotateComponent rot;
+        rot.angularVelocityEuler = {10.0f, 20.0f, 30.0f};
+        auto copy = rot.clone();
+        auto* rc = dynamic_cast<scene::RotateComponent*>(copy.get());
+        assert(rc != nullptr);
+        assert(rc->angularVelocityEuler.x == 10.0f);
+        assert(rc->angularVelocityEuler.y == 20.0f);
+        assert(rc->angularVelocityEuler.z == 30.0f);
+    }
+
+    // component.add_rotator and component.set_rotator commands.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("component.add_rotator Spinner", ctx);
+        assert(result.success);
+        assert(obj->hasComponent<scene::RotateComponent>());
+
+        // Adding twice fails.
+        result = executeCommand("component.add_rotator Spinner", ctx);
+        assert(!result.success);
+
+        // Missing object.
+        result = executeCommand("component.add_rotator Nope", ctx);
+        assert(!result.success);
+
+        // Set angular velocity.
+        result = executeCommand("component.set_rotator Spinner 0 90 0", ctx);
+        assert(result.success);
+        scene::RotateComponent* rc = obj->getComponent<scene::RotateComponent>();
+        assert(rc->angularVelocityEuler.y == 90.0f);
+
+        // Set on missing object / missing component.
+        result = executeCommand("component.set_rotator Nope 0 0 0", ctx);
+        assert(!result.success);
+        GameObject* plain = scene.createObject("Plain");
+        (void)plain;
+        result = executeCommand("component.set_rotator Plain 0 0 0", ctx);
+        assert(!result.success);
+    }
+
+    // sim.step advances the simulation deterministically.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {0.0f, 90.0f, 0.0f};
+        obj->addComponent(std::move(rot));
+
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("sim.step 1.0", ctx);
+        assert(result.success);
+        float expectedY = 90.0f * kDegToRad;
+        assert(std::fabs(obj->transform().rotation.y - expectedY) < 1e-4f);
+    }
+
+    // assert.rotation success and failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {10.0f, 20.0f, 30.0f};
+        obj->addComponent(std::move(rot));
+
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        executeCommand("sim.step 1.0", ctx);
+
+        AgentCommandResult result = executeCommand("assert.rotation Spinner 10 20 30", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Failure with tolerance.
+        lastFailure.clear();
+        result = executeCommand("assert.rotation Spinner 10 20 99 0.01", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected rotation: 10.0000, 20.0000, 99.0000") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Loose tolerance passes.
+        result = executeCommand("assert.rotation Spinner 10 20 35 100.0", ctx);
+        assert(result.success);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.rotation Nope 0 0 0", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+    }
+
+    // RotateComponent serialization round-trip.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {0.0f, 90.0f, 0.0f};
+        obj->addComponent(std::move(rot));
+
+        const char* path = "build/tests/rotator_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        assert(SceneSerializer::load(loaded, path, error));
+
+        GameObject* loadedObj = nullptr;
+        for (const auto& o : loaded.objects()) {
+            if (!loaded.isCamera(o.get())) loadedObj = o.get();
+        }
+        assert(loadedObj != nullptr);
+        scene::RotateComponent* lr = loadedObj->getComponent<scene::RotateComponent>();
+        assert(lr != nullptr);
+        assert(lr->angularVelocityEuler.x == 0.0f);
+        assert(lr->angularVelocityEuler.y == 90.0f);
+        assert(lr->angularVelocityEuler.z == 0.0f);
+
+        std::filesystem::remove(path);
+    }
+
+    // DebugState lists RotateComponent with angular velocity.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Spinner");
+        auto rot = std::make_unique<scene::RotateComponent>();
+        rot->angularVelocityEuler = {0.0f, 90.0f, 0.0f};
+        obj->addComponent(std::move(rot));
+
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr);
+        assert(text.find("components: RotateComponent (angularVelocity: 0.00, 90.00, 0.00)") != std::string::npos);
+    }
+
+    // New commands appear in command discovery.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("agent.commands", ctx);
+        assert(result.success);
+        assert(result.output.find("component.add_rotator") != std::string::npos);
+        assert(result.output.find("component.set_rotator") != std::string::npos);
+        assert(result.output.find("sim.step") != std::string::npos);
+        assert(result.output.find("assert.rotation") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");

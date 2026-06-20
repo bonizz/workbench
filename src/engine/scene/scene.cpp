@@ -38,6 +38,17 @@ ObjectId Scene::allocateObjectId()
     return ObjectId{nextObjectId_++};
 }
 
+void Scene::update(float deltaTime)
+{
+    for (const auto& obj : objects_) {
+        if (!obj->active()) continue;
+        for (const auto& comp : obj->components()) {
+            comp->startIfNeeded();
+            comp->onUpdate(deltaTime);
+        }
+    }
+}
+
 void Scene::buildRenderCommands(RenderContext& ctx) const
 {
     ctx.drawGround(camera_->transform().position);

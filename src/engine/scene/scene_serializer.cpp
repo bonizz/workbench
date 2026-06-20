@@ -2,6 +2,7 @@
 
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
+#include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/transform.h"
 
@@ -256,6 +257,7 @@ private:
         std::string type;
         simd::float4 color{1.0f, 1.0f, 1.0f, 1.0f};
         std::string mesh = "cube";
+        Vec3 angularVelocity{0.0f, 0.0f, 0.0f};
 
         bool firstField = true;
         while (current_.type != TokenType::ObjectEnd) {
@@ -293,6 +295,8 @@ private:
                 advance();
             } else if (field == "color") {
                 if (!parseFloat4(color, error)) return false;
+            } else if (field == "angularVelocity") {
+                if (!parseFloat3(angularVelocity, error)) return false;
             } else {
                 error = "Unknown component field: " + field;
                 return false;
@@ -306,6 +310,10 @@ private:
             meshRenderer->mesh = mesh;
             meshRenderer->color = color;
             out.push_back(std::move(meshRenderer));
+        } else if (type == "RotateComponent") {
+            auto rotator = std::make_unique<scene::RotateComponent>();
+            rotator->angularVelocityEuler = angularVelocity;
+            out.push_back(std::move(rotator));
         } else {
             error = "Unknown component type: " + type;
             return false;
@@ -453,6 +461,11 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
                 out << "{\"type\": \"MeshRenderer\", ";
                 out << "\"mesh\": \"" << mesh->mesh << "\", ";
                 out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
+            } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
+                if (!firstComp) out << ", ";
+                firstComp = false;
+                out << "{\"type\": \"RotateComponent\", ";
+                out << "\"angularVelocity\": [" << rot->angularVelocityEuler.x << ", " << rot->angularVelocityEuler.y << ", " << rot->angularVelocityEuler.z << "]}";
             }
         }
 

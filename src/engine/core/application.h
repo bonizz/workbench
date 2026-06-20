@@ -45,6 +45,8 @@ public:
     uint64_t frame() const { return frame_; }
     size_t lastRenderCommandCount() const { return lastRenderCommandCount_; }
 
+    bool liveSimulation() const { return liveSimulation_; }
+
     // Input events from the platform window.
     void onKeyEvent(int keyCode, bool down);
     void onMouseDrag(float deltaX, float deltaY);
@@ -84,6 +86,11 @@ private:
     AutomationState automationState_ = AutomationState::Pending;
     int automationWaitFrames_ = 0;
     std::string pendingScreenshotPath_;
+
+    // True only in interactive (no automation) mode. When false, the
+    // simulation advances exclusively via `sim.step` so scripts and tests
+    // are deterministic and not polluted by per-frame real-time updates.
+    bool liveSimulation_ = false;
 
     std::string lastAssertionFailure_;
     bool automationFailed_ = false;

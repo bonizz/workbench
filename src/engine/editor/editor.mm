@@ -5,6 +5,7 @@
 #include "debug/debug_state.h"
 #include "renderer/metal_renderer.h"
 #include "scene/mesh_renderer.h"
+#include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
 
@@ -187,6 +188,11 @@ void Editor::drawInspector()
         }
     }
 
+    if (scene::RotateComponent* rot = selected_->getComponent<scene::RotateComponent>()) {
+        ImGui::Text("RotateComponent");
+        ImGui::DragFloat3("Angular Velocity", &rot->angularVelocityEuler.x, 1.0f);
+    }
+
     ImGui::Separator();
 
     ImGui::BeginDisabled(selected_->hasComponent<MeshRenderer>());
@@ -194,6 +200,14 @@ void Editor::drawInspector()
         auto mesh = std::make_unique<MeshRenderer>();
         mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
         selected_->addComponent(std::move(mesh));
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+
+    ImGui::BeginDisabled(selected_->hasComponent<scene::RotateComponent>());
+    if (ImGui::Button("Add RotateComponent")) {
+        selected_->addComponent(std::make_unique<scene::RotateComponent>());
     }
     ImGui::EndDisabled();
 

@@ -53,6 +53,13 @@ bool Application::init()
     cube->addComponent(std::move(mesh));
 
     onResize(window_->width(), window_->height(), window_->backingScale());
+
+    // Simulation advances per frame only when no automation is requested.
+    // In automation mode (--run-script/--bundle/--run-tests) the simulation
+    // advances exclusively via `sim.step` for determinism.
+    liveSimulation_ = cliOptions_.runScript.empty()
+                   && cliOptions_.bundleName.empty()
+                   && !cliOptions_.runTests;
     return true;
 }
 
@@ -201,6 +208,10 @@ void Application::onUpdate(float deltaTime)
     input.scrollDelta = scrollDelta_;
 
     scene_->camera().update(time_.deltaTime(), input);
+
+    if (liveSimulation_) {
+        scene_->update(time_.deltaTime());
+    }
 
     mouseDeltaX_ = 0.0f;
     mouseDeltaY_ = 0.0f;

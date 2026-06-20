@@ -3,6 +3,7 @@
 #include "scene/scene.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
+#include "scene/rotate_component.h"
 #include "scene/transform.h"
 #include "core/math.h"
 
@@ -99,6 +100,9 @@ std::string build(uint64_t frame,
                 if (!first) out << ", ";
                 first = false;
                 out << comp->typeName();
+                if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
+                    out << " (angularVelocity: " << formatVec3(rot->angularVelocityEuler) << ")";
+                }
             }
         }
         out << "\n\n";

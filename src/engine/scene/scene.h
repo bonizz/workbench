@@ -21,6 +21,12 @@ public:
 
     const std::vector<std::unique_ptr<GameObject>>& objects() const { return objects_; }
 
+    // Advances all components. Iterates objects in creation/ObjectId order,
+    // skipping inactive ones, and per object iterates components in add order.
+    // Each component gets onStart() once (lazily, before its first onUpdate)
+    // then onUpdate(dt). Camera is unaffected (it has no components).
+    void update(float deltaTime);
+
     void buildRenderCommands(RenderContext& ctx) const;
 
     bool deleteObject(GameObject* obj);

@@ -56,16 +56,20 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `scene.load <filename>` | Load authored objects from `assets/scenes/<filename>`. |
 | `component.list <id>` | List components attached to a GameObject. |
 | `component.add_mesh_renderer <id>` | Add a MeshRenderer component to a GameObject. |
+| `component.add_rotator <name>` | Add a RotateComponent (angular velocity 0,0,0) to a named GameObject. |
+| `component.set_rotator <name> <x> <y> <z>` | Set a RotateComponent's angular velocity in degrees per second. |
 | `transform.get <id>` | Show position, rotation, and scale of an object. |
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
 | `script.run <filename>` | Execute agent commands from `assets/scripts/<filename>`. |
 | `render.capture [filename]` | Queue a viewport screenshot to `captures/<filename>`. |
 | `debug.bundle <name>` | Create a repro bundle: `state.txt` + `screenshot.png`. |
+| `sim.step [dt]` | Advance the simulation by `dt` seconds (default 1/60). Calls `Scene::update`. |
 | `assert.object_count <count>` | Assert the total number of GameObjects. |
 | `assert.object_exists <name>` | Assert a named GameObject exists. |
 | `assert.selected [name]` | Assert an object is selected (optionally matching a name). |
 | `assert.has_component <name> <type>` | Assert a GameObject has a component. |
+| `assert.rotation <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's Euler rotation in degrees (default tolerance 0.01). |
 
 ## Command Discovery
 
@@ -100,6 +104,12 @@ Command behavior is covered by the existing `tests` executable:
 - `scene.select` updates the selection pointer.
 - `transform.set_position` updates object state.
 - `debug.dump` returns a valid state snapshot.
+
+## Simulation and determinism
+
+In **interactive mode** the simulation advances every frame, so behavior components such as `RotateComponent` animate live in the editor.
+
+In **automation mode** (`--run-script`, `--run-tests`, `--bundle`) the per-frame auto-advance is disabled. The simulation advances **only** when a script calls `sim.step [dt]`. This keeps scripts and tests deterministic: the same `sim.step` values always produce the same scene state. See `docs/components.md` for the exact update order.
 
 ## Future MCP Direction
 

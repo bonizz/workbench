@@ -12,6 +12,10 @@ struct Vec3
 
 using Mat4 = simd::float4x4;
 
+constexpr float kPi = 3.14159265f;
+constexpr float kDegToRad = kPi / 180.0f;
+constexpr float kRadToDeg = 180.0f / kPi;
+
 Mat4 identity();
 Mat4 translation(float x, float y, float z);
 Mat4 rotationX(float radians);

@@ -8,6 +8,7 @@
 #include "renderer/metal_renderer.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
+#include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/scene_serializer.h"
 #include "scene/transform.h"
@@ -521,6 +522,122 @@ AgentCommandResult cmdComponentAddMeshRenderer(const std::vector<std::string>& a
     return makeSuccess("Added MeshRenderer to " + obj->name() + " [" + args[1] + "]");
 }
 
+AgentCommandResult cmdComponentAddRotator(const std::vector<std::string>& args,
+                                         AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: component.add_rotator <name>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    if (obj->hasComponent<scene::RotateComponent>()) {
+        return makeError(obj->name() + " already has a RotateComponent");
+    }
+
+    obj->addComponent(std::make_unique<scene::RotateComponent>());
+    return makeSuccess("Added RotateComponent to " + obj->name());
+}
+
+AgentCommandResult cmdComponentSetRotator(const std::vector<std::string>& args,
+                                         AgentCommandContext& ctx)
+{
+    if (args.size() < 5) {
+        return makeError("Usage: component.set_rotator <name> <x> <y> <z>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    scene::RotateComponent* rot = obj->getComponent<scene::RotateComponent>();
+    if (!rot) {
+        return makeError(obj->name() + " has no RotateComponent");
+    }
+
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    if (!parseFloat(args[2], x) || !parseFloat(args[3], y) || !parseFloat(args[4], z)) {
+        return makeError("Invalid angular velocity values");
+    }
+
+    rot->angularVelocityEuler = {x, y, z};
+    std::ostringstream oss;
+    oss << "Set " << obj->name() << " angular velocity to " << formatVec3({x, y, z}) << " deg/s";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSimStep(const std::vector<std::string>& args,
+                              AgentCommandContext& ctx)
+{
+    float dt = 1.0f / 60.0f;
+    if (args.size() >= 2) {
+        if (!parseFloat(args[1], dt)) {
+            return makeError("Invalid dt: " + args[1]);
+        }
+        if (dt < 0.0f) {
+            return makeError("dt must be non-negative");
+        }
+    }
+
+    ctx.scene.update(dt);
+    std::ostringstream oss;
+    oss << "Stepped simulation by " << dt << "s";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdAssertRotation(const std::vector<std::string>& args,
+                                     AgentCommandContext& ctx)
+{
+    if (args.size() < 5) {
+        return makeError("Usage: assert.rotation <name> <x> <y> <z> [tolerance]");
+    }
+
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeAssertionFailure(ctx, "Object not found: " + name);
+    }
+
+    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
+    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
+        return makeError("Invalid rotation values");
+    }
+
+    float tolerance = 0.01f;
+    if (args.size() >= 6) {
+        if (!parseFloat(args[5], tolerance)) {
+            return makeError("Invalid tolerance: " + args[5]);
+        }
+        if (tolerance < 0.0f) {
+            return makeError("Tolerance must be non-negative");
+        }
+    }
+
+    const Vec3& rot = obj->transform().rotation; // radians
+    float ax = rot.x * kRadToDeg;
+    float ay = rot.y * kRadToDeg;
+    float az = rot.z * kRadToDeg;
+
+    auto near = [](float a, float b, float tol) {
+        return std::fabs(a - b) <= tol;
+    };
+
+    if (near(ax, ex, tolerance) && near(ay, ey, tolerance) && near(az, ez, tolerance)) {
+        return makeSuccess("OK");
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(4);
+    oss << "Expected rotation: " << ex << ", " << ey << ", " << ez << "\n";
+    oss << "Actual rotation:   " << ax << ", " << ay << ", " << az;
+    if (args.size() >= 6) {
+        oss << " (tolerance " << tolerance << ")";
+    }
+    return makeAssertionFailure(ctx, oss.str());
+}
+
 AgentCommandResult cmdAssertObjectCount(const std::vector<std::string>& args,
                                         AgentCommandContext& ctx)
 {
@@ -710,6 +827,21 @@ const std::vector<CommandEntry>& commandTable()
           "Adds a MeshRenderer component to a GameObject.",
           "component.add_mesh_renderer 2"},
          cmdComponentAddMeshRenderer},
+        {{"component.add_rotator",
+          "component.add_rotator <name>",
+          "Adds a RotateComponent (angular velocity 0,0,0) to a named GameObject.",
+          "component.add_rotator Spinner"},
+         cmdComponentAddRotator},
+        {{"component.set_rotator",
+          "component.set_rotator <name> <x> <y> <z>",
+          "Sets a RotateComponent's angular velocity in degrees per second.",
+          "component.set_rotator Spinner 0 90 0"},
+         cmdComponentSetRotator},
+        {{"sim.step",
+          "sim.step [dt]",
+          "Advances the simulation by dt seconds (default 1/60). Calls Scene::update.",
+          "sim.step 1.0"},
+         cmdSimStep},
         {{"transform.get",
           "transform.get <id>",
           "Shows the transform of a GameObject.",
@@ -760,6 +892,11 @@ const std::vector<CommandEntry>& commandTable()
           "Asserts that a GameObject has a specific component.",
           "assert.has_component Cube MeshRenderer"},
          cmdAssertHasComponent},
+        {{"assert.rotation",
+          "assert.rotation <name> <x> <y> <z> [tolerance]",
+          "Asserts a named GameObject's Euler rotation in degrees (default tolerance 0.01).",
+          "assert.rotation Spinner 0 90 0"},
+         cmdAssertRotation},
     };
     return table;
 }
