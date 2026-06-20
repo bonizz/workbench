@@ -74,7 +74,24 @@
     return YES;
 }
 
+- (BOOL)becomeFirstResponder {
+    // Redirect first responder to ImGui's KeyEventResponder subview so text
+    // input works in ImGui widgets. Game input still flows through the local
+    // event monitor installed by the ImGui OSX backend.
+    for (NSView* subview in self.subviews) {
+        if (subview != self && [subview acceptsFirstResponder]) {
+            if ([self.window makeFirstResponder:subview]) {
+                return YES;
+            }
+        }
+    }
+    return [super becomeFirstResponder];
+}
+
 - (void)keyDown:(NSEvent*)event {
+    // Swallow key events to prevent system beep. ImGui input is handled by the
+    // backend's KeyEventResponder subview; game input is handled by the event
+    // monitor.
     (void)event;
 }
 
