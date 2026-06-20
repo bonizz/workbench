@@ -581,6 +581,98 @@ int main()
         assert(text.find("Last Bundle: bundles/repro/") != std::string::npos);
     }
 
+    // Assertion commands.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* cube = scene.createObject("Cube");
+        cube->addComponent(std::make_unique<MeshRenderer>());
+
+        GameObject* selected = cube;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        // assert.object_count success (camera + cube = 2).
+        AgentCommandResult result = executeCommand("assert.object_count 2", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // assert.object_count failure.
+        result = executeCommand("assert.object_count 5", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected object count: 5") != std::string::npos);
+        assert(result.output.find("Actual object count: 2") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // assert.object_exists success.
+        result = executeCommand("assert.object_exists Cube", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // assert.object_exists failure.
+        lastFailure.clear();
+        result = executeCommand("assert.object_exists Missing", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Missing") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // assert.selected success.
+        result = executeCommand("assert.selected Cube", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // assert.selected failure.
+        lastFailure.clear();
+        result = executeCommand("assert.selected Wrong", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected selection: Wrong") != std::string::npos);
+        assert(result.output.find("Actual selection: Cube") != std::string::npos);
+
+        // assert.has_component success.
+        result = executeCommand("assert.has_component Cube MeshRenderer", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // assert.has_component failure.
+        lastFailure.clear();
+        GameObject* plain = scene.createObject("Plain");
+        (void)plain;
+        result = executeCommand("assert.has_component Plain MeshRenderer", ctx);
+        assert(!result.success);
+        assert(result.output.find("Plain does not have component MeshRenderer") != std::string::npos);
+    }
+
+    // Script runner: assertion failure stops execution.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        std::filesystem::create_directories("build/tests");
+        const char* path = "build/tests/assert_fail.wbs";
+        std::ofstream out(path);
+        out << "assert.object_exists Cube\n";
+        out << "scene.create_cube Cube\n";
+        out.close();
+
+        ScriptResult result = runScript(ctx, path, "assert_fail.wbs");
+        assert(!result.success);
+        assert(result.error.find("Object not found: Cube") != std::string::npos);
+        assert(result.executed == 0);
+
+        std::filesystem::remove(path);
+    }
+
+    // DebugState reports last assertion failure.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        std::string failure = "Expected object count: 1\nActual object count: 0";
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, {}, {}, {}, &failure);
+        assert(text.find("Last Assertion Failure: Expected object count: 1") != std::string::npos);
+    }
+
     // CLI option parsing.
     {
         const char* args[] = {"sandbox", "--run-script", "create_test_scene.wbs", "--bundle", "cli_smoke", "--exit", "--frames", "5"};

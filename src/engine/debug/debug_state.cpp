@@ -57,7 +57,8 @@ std::string build(uint64_t frame,
                   const GameObject* selected,
                   const std::string& lastScriptPath,
                   const std::string& lastCapturePath,
-                  const std::string& lastBundlePath)
+                  const std::string& lastBundlePath,
+                  const std::string* lastAssertionFailure)
 {
     std::ostringstream out;
     out << std::fixed << std::setprecision(1);
@@ -77,6 +78,9 @@ std::string build(uint64_t frame,
     }
     if (!lastBundlePath.empty()) {
         out << "Last Bundle: " << lastBundlePath << "\n";
+    }
+    if (lastAssertionFailure && !lastAssertionFailure->empty()) {
+        out << "Last Assertion Failure: " << *lastAssertionFailure << "\n";
     }
     out << "\n";
 

@@ -31,6 +31,10 @@ struct AgentCommandContext
 
     // Updated by debug.bundle so debug.dump can report it.
     std::string lastBundlePath;
+
+    // Optional pointer to the owner's persistent last assertion failure message.
+    // Assertion commands set this on failure so it survives across contexts/frames.
+    std::string* lastAssertionFailure = nullptr;
 };
 
 struct AgentCommandResult

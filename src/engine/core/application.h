@@ -29,10 +29,11 @@ public:
     ~Application();
 
     bool init();
-    void run();
+    int run();
     void shutdown();
 
     void setCliOptions(const CliOptions& options);
+    int exitCode() const;
 
     // Called by the platform window each frame.
     void onUpdate(float deltaTime);
@@ -79,4 +80,7 @@ private:
     AutomationState automationState_ = AutomationState::Pending;
     int automationWaitFrames_ = 0;
     std::string pendingScreenshotPath_;
+
+    std::string lastAssertionFailure_;
+    bool automationFailed_ = false;
 };

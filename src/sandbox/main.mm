@@ -6,11 +6,9 @@ int main(int argc, const char* argv[])
     @autoreleasepool {
         Application app;
         app.setCliOptions(parseCliOptions(argc, argv));
-        if (app.init()) {
-            app.run();
+        if (!app.init()) {
+            return 1;
         }
-        app.shutdown();
+        return app.run();
     }
-
-    return 0;
 }

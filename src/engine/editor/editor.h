@@ -53,4 +53,5 @@ private:
     char bundleBuffer_[128] = {};
     std::string bundleOutput_;
     std::string lastBundlePath_;
+    std::string lastAssertionFailure_;
 };

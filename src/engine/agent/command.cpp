@@ -126,6 +126,16 @@ std::vector<const GameObject*> sortedObjects(const Scene& scene)
     return result;
 }
 
+GameObject* findObjectByName(Scene& scene, const std::string& name)
+{
+    for (const auto& obj : scene.objects()) {
+        if (obj->name() == name) {
+            return obj.get();
+        }
+    }
+    return nullptr;
+}
+
 AgentCommandResult makeError(const std::string& message)
 {
     return AgentCommandResult{false, message};
@@ -134,6 +144,14 @@ AgentCommandResult makeError(const std::string& message)
 AgentCommandResult makeSuccess(const std::string& message)
 {
     return AgentCommandResult{true, message};
+}
+
+AgentCommandResult makeAssertionFailure(AgentCommandContext& ctx, const std::string& message)
+{
+    if (ctx.lastAssertionFailure) {
+        *ctx.lastAssertionFailure = message;
+    }
+    return AgentCommandResult{false, message};
 }
 
 AgentCommandResult cmdSceneList(const std::vector<std::string>&,
@@ -503,6 +521,87 @@ AgentCommandResult cmdComponentAddMeshRenderer(const std::vector<std::string>& a
     return makeSuccess("Added MeshRenderer to " + obj->name() + " [" + args[1] + "]");
 }
 
+AgentCommandResult cmdAssertObjectCount(const std::vector<std::string>& args,
+                                        AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: assert.object_count <count>");
+    }
+
+    uint64_t expected = 0;
+    if (!parseUint64(args[1], expected)) {
+        return makeError("Invalid count: " + args[1]);
+    }
+
+    size_t actual = ctx.scene.objects().size();
+    if (actual == expected) {
+        return makeSuccess("OK");
+    }
+
+    std::ostringstream oss;
+    oss << "Expected object count: " << expected << "\n";
+    oss << "Actual object count: " << actual;
+    return makeAssertionFailure(ctx, oss.str());
+}
+
+AgentCommandResult cmdAssertObjectExists(const std::vector<std::string>& args,
+                                         AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: assert.object_exists <name>");
+    }
+
+    const std::string& name = args[1];
+    if (findObjectByName(ctx.scene, name)) {
+        return makeSuccess("OK");
+    }
+
+    return makeAssertionFailure(ctx, "Object not found: " + name);
+}
+
+AgentCommandResult cmdAssertSelected(const std::vector<std::string>& args,
+                                     AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        if (ctx.selected) {
+            return makeSuccess("OK");
+        }
+        return makeAssertionFailure(ctx, "No object selected");
+    }
+
+    const std::string& name = args[1];
+    if (ctx.selected && ctx.selected->name() == name) {
+        return makeSuccess("OK");
+    }
+
+    std::string actual = ctx.selected ? ctx.selected->name() : "none";
+    return makeAssertionFailure(ctx, "Expected selection: " + name + "\nActual selection: " + actual);
+}
+
+AgentCommandResult cmdAssertHasComponent(const std::vector<std::string>& args,
+                                         AgentCommandContext& ctx)
+{
+    if (args.size() < 3) {
+        return makeError("Usage: assert.has_component <name> <component_type>");
+    }
+
+    const std::string& name = args[1];
+    const std::string& type = args[2];
+
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeAssertionFailure(ctx, "Object not found: " + name);
+    }
+
+    for (const auto& comp : obj->components()) {
+        if (comp->typeName() == type) {
+            return makeSuccess("OK");
+        }
+    }
+
+    return makeAssertionFailure(ctx, name + " does not have component " + type);
+}
+
 const std::vector<CommandEntry>& commandTable();
 
 AgentCommandResult cmdAgentCommands(const std::vector<std::string>&,
@@ -641,6 +740,26 @@ const std::vector<CommandEntry>& commandTable()
           "Queues a screenshot of the current viewport to captures/<filename>.",
           "render.capture test_scene.png"},
          cmdRenderCapture},
+        {{"assert.object_count",
+          "assert.object_count <count>",
+          "Asserts the total number of GameObjects in the scene (camera included).",
+          "assert.object_count 3"},
+         cmdAssertObjectCount},
+        {{"assert.object_exists",
+          "assert.object_exists <name>",
+          "Asserts that a GameObject with the given name exists.",
+          "assert.object_exists Cube"},
+         cmdAssertObjectExists},
+        {{"assert.selected",
+          "assert.selected [name]",
+          "Asserts that an object is selected, optionally matching a specific name.",
+          "assert.selected Cube"},
+         cmdAssertSelected},
+        {{"assert.has_component",
+          "assert.has_component <name> <component_type>",
+          "Asserts that a GameObject has a specific component.",
+          "assert.has_component Cube MeshRenderer"},
+         cmdAssertHasComponent},
     };
     return table;
 }

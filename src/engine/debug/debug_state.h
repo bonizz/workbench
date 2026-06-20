@@ -18,7 +18,8 @@ std::string build(uint64_t frame,
                   const GameObject* selected,
                   const std::string& lastScriptPath = {},
                   const std::string& lastCapturePath = {},
-                  const std::string& lastBundlePath = {});
+                  const std::string& lastBundlePath = {},
+                  const std::string* lastAssertionFailure = nullptr);
 
 // Writes text to logs/latest_state.txt, creating logs/ if needed.
 void writeToFile(const std::string& text, const std::string& path = "logs/latest_state.txt");

@@ -209,7 +209,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Execute")) {
-        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_};
         AgentCommandResult result = executeCommand(commandBuffer_, ctx);
 
         consoleOutput_ += "> " + std::string(commandBuffer_) + "\n";
@@ -244,7 +244,7 @@ void Editor::drawScriptRunner(Scene& scene)
     ImGui::InputText("Script File", scriptBuffer_, sizeof(scriptBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Run Script")) {
-        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_};
         AgentCommandResult result = executeCommand(std::string("script.run ") + scriptBuffer_, ctx);
 
         scriptOutput_ = result.output;
@@ -277,7 +277,7 @@ void Editor::drawScreenshotPanel(Scene& scene)
     ImGui::InputText("Filename", screenshotBuffer_, sizeof(screenshotBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Capture Screenshot")) {
-        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_};
         std::string command = std::string("render.capture ") + screenshotBuffer_;
         AgentCommandResult result = executeCommand(command, ctx);
         screenshotOutput_ = result.output;
@@ -302,7 +302,7 @@ void Editor::drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float
     ImGui::InputText("Bundle Name", bundleBuffer_, sizeof(bundleBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Create Bundle")) {
-        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_};
         std::string command = std::string("debug.bundle ") + bundleBuffer_;
         AgentCommandResult result = executeCommand(command, ctx);
         bundleOutput_ = result.output;
@@ -326,12 +326,12 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     ImGui::Begin("Diagnostics");
 
     if (ImGui::Button("Write Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_);
         DebugState::writeToFile(text);
     }
 
     if (ImGui::Button("Copy Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_);
         ImGui::SetClipboardText(text.c_str());
     }
 

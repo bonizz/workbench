@@ -55,14 +55,20 @@ bool Application::init()
     return true;
 }
 
-void Application::run()
+int Application::run()
 {
     window_->run();
+    return exitCode();
 }
 
 void Application::setCliOptions(const CliOptions& options)
 {
     cliOptions_ = options;
+}
+
+int Application::exitCode() const
+{
+    return automationFailed_ ? 1 : 0;
 }
 
 void Application::shutdown()
@@ -105,24 +111,26 @@ void Application::runAutomation()
 {
     GameObject* selected = nullptr;
     AgentCommandContext ctx{*scene_, selected, frame_, fps_, frameTimeMs_,
-                            lastRenderCommandCount_, {}, renderer_.get()};
+                            lastRenderCommandCount_, {}, renderer_.get(),
+                            {}, {}, &lastAssertionFailure_};
 
-    if (!cliOptions_.runScript.empty()) {
-        std::string command = "script.run " + cliOptions_.runScript;
+    auto runAutomationCommand = [&](const std::string& command) {
         AgentCommandResult result = executeCommand(command, ctx);
-        std::printf("%s\n", result.output.c_str());
         if (!result.success) {
             std::fprintf(stderr, "Automation failed: %s\n", result.output.c_str());
+            automationFailed_ = true;
+        } else {
+            std::printf("%s\n", result.output.c_str());
         }
+        return result.success;
+    };
+
+    if (!cliOptions_.runScript.empty()) {
+        runAutomationCommand("script.run " + cliOptions_.runScript);
     }
 
     if (!cliOptions_.bundleName.empty()) {
-        std::string command = "debug.bundle " + cliOptions_.bundleName;
-        AgentCommandResult result = executeCommand(command, ctx);
-        std::printf("%s\n", result.output.c_str());
-        if (!result.success) {
-            std::fprintf(stderr, "Automation failed: %s\n", result.output.c_str());
-        } else {
+        if (runAutomationCommand("debug.bundle " + cliOptions_.bundleName)) {
             pendingScreenshotPath_ = ctx.lastCapturePath;
         }
     }

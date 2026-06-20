@@ -17,10 +17,19 @@ This is intentionally local and in-process. There is no networking, JSON, or MCP
 struct AgentCommandContext {
     Scene& scene;
     GameObject*& selected;
+
     uint64_t frame = 0;
     float fps = 0.0f;
     float frameTimeMs = 0.0f;
     size_t renderCommandCount = 0;
+
+    std::string lastScriptPath;
+    MetalRenderer* renderer = nullptr;
+    std::string lastCapturePath;
+    std::string lastBundlePath;
+
+    // Optional pointer to the owner's persistent last assertion failure.
+    std::string* lastAssertionFailure = nullptr;
 };
 
 struct AgentCommandResult {
@@ -53,6 +62,10 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `script.run <filename>` | Execute agent commands from `assets/scripts/<filename>`. |
 | `render.capture [filename]` | Queue a viewport screenshot to `captures/<filename>`. |
 | `debug.bundle <name>` | Create a repro bundle: `state.txt` + `screenshot.png`. |
+| `assert.object_count <count>` | Assert the total number of GameObjects. |
+| `assert.object_exists <name>` | Assert a named GameObject exists. |
+| `assert.selected [name]` | Assert an object is selected (optionally matching a name). |
+| `assert.has_component <name> <type>` | Assert a GameObject has a component. |
 
 ## Command Discovery
 

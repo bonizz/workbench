@@ -244,7 +244,7 @@ void handleTerminationSignal(int)
 
 void Window::terminate()
 {
-    [NSApp terminate:nil];
+    [NSApp stop:nil];
 }
 
 void Window::run()
