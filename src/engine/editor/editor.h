@@ -36,6 +36,7 @@ private:
     void drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
     void drawScriptRunner(Scene& scene);
     void drawScreenshotPanel(Scene& scene);
+    void drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
 
     bool initialized_ = false;
     GameObject* selected_ = nullptr;
@@ -49,4 +50,7 @@ private:
     char screenshotBuffer_[128] = {};
     std::string screenshotOutput_;
     std::string lastCapturePath_;
+    char bundleBuffer_[128] = {};
+    std::string bundleOutput_;
+    std::string lastBundlePath_;
 };

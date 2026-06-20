@@ -79,6 +79,8 @@ project "tests"
         "src/engine/core/object_id.h",
         "src/engine/core/time.cpp",
         "src/engine/core/time.h",
+        "src/engine/debug/bundle.cpp",
+        "src/engine/debug/bundle.h",
         "src/engine/debug/debug_state.cpp",
         "src/engine/debug/debug_state.h",
         "src/engine/renderer/render_context.cpp",

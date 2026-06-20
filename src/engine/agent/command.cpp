@@ -3,6 +3,7 @@
 #include "agent/script_runner.h"
 #include "capture/capture.h"
 #include "core/math.h"
+#include "debug/bundle.h"
 #include "debug/debug_state.h"
 #include "renderer/metal_renderer.h"
 #include "scene/game_object.h"
@@ -230,8 +231,40 @@ AgentCommandResult cmdDebugDump(const std::vector<std::string>&,
 {
     std::string text = DebugState::build(
         ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount, ctx.scene, ctx.selected,
-        ctx.lastScriptPath, ctx.lastCapturePath);
+        ctx.lastScriptPath, ctx.lastCapturePath, ctx.lastBundlePath);
     return makeSuccess(text);
+}
+
+AgentCommandResult cmdDebugBundle(const std::vector<std::string>& args,
+                                  AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: debug.bundle <name>");
+    }
+
+    const std::string& name = args[1];
+    if (!Bundle::isValidBundleName(name)) {
+        return makeError("Invalid bundle name: " + name);
+    }
+
+    if (!ctx.renderer) {
+        return makeError("Renderer not available");
+    }
+
+    std::string bundlePath;
+    if (!Bundle::createBundle(name, ctx, bundlePath)) {
+        return makeError("Failed to create bundle: " + name);
+    }
+
+    ctx.lastBundlePath = bundlePath;
+
+    std::ostringstream oss;
+    oss << "Created bundle:\n";
+    oss << bundlePath << "\n\n";
+    oss << "Files:\n";
+    oss << "  state.txt      (written synchronously)\n";
+    oss << "  screenshot.png (queued asynchronously)\n";
+    return makeSuccess(oss.str());
 }
 
 namespace {
@@ -593,6 +626,11 @@ const std::vector<CommandEntry>& commandTable()
           "Returns a full debug state snapshot.",
           "debug.dump"},
          cmdDebugDump},
+        {{"debug.bundle",
+          "debug.bundle <name>",
+          "Creates a repro bundle: state.txt and screenshot.png.",
+          "debug.bundle cube_overlap"},
+         cmdDebugBundle},
         {{"script.run",
           "script.run <filename>",
           "Runs an agent command script from assets/scripts/<filename>.",

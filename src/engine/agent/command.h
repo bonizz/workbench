@@ -28,6 +28,9 @@ struct AgentCommandContext
 
     // Updated by render.capture so debug.dump can report it.
     std::string lastCapturePath;
+
+    // Updated by debug.bundle so debug.dump can report it.
+    std::string lastBundlePath;
 };
 
 struct AgentCommandResult

@@ -52,6 +52,7 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
 | `script.run <filename>` | Execute agent commands from `assets/scripts/<filename>`. |
 | `render.capture [filename]` | Queue a viewport screenshot to `captures/<filename>`. |
+| `debug.bundle <name>` | Create a repro bundle: `state.txt` + `screenshot.png`. |
 
 ## Command Discovery
 

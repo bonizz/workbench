@@ -88,6 +88,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
     drawScriptRunner(scene);
     drawScreenshotPanel(scene);
+    drawReproBundlePanel(scene, frame, fps, frameTimeMs, renderCommandCount);
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
@@ -208,7 +209,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Execute")) {
-        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_};
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
         AgentCommandResult result = executeCommand(commandBuffer_, ctx);
 
         consoleOutput_ += "> " + std::string(commandBuffer_) + "\n";
@@ -219,6 +220,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
         commandBuffer_[0] = '\0';
         lastScriptPath_ = ctx.lastScriptPath;
         lastCapturePath_ = ctx.lastCapturePath;
+        lastBundlePath_ = ctx.lastBundlePath;
     }
 
     ImGui::Separator();
@@ -242,7 +244,7 @@ void Editor::drawScriptRunner(Scene& scene)
     ImGui::InputText("Script File", scriptBuffer_, sizeof(scriptBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Run Script")) {
-        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_};
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
         AgentCommandResult result = executeCommand(std::string("script.run ") + scriptBuffer_, ctx);
 
         scriptOutput_ = result.output;
@@ -251,6 +253,7 @@ void Editor::drawScriptRunner(Scene& scene)
         }
         lastScriptPath_ = ctx.lastScriptPath;
         lastCapturePath_ = ctx.lastCapturePath;
+        lastBundlePath_ = ctx.lastBundlePath;
     }
 
     ImGui::Separator();
@@ -274,16 +277,43 @@ void Editor::drawScreenshotPanel(Scene& scene)
     ImGui::InputText("Filename", screenshotBuffer_, sizeof(screenshotBuffer_));
     ImGui::SameLine();
     if (ImGui::Button("Capture Screenshot")) {
-        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_};
+        AgentCommandContext ctx{scene, selected_, 0, 0.0f, 0.0f, 0, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
         std::string command = std::string("render.capture ") + screenshotBuffer_;
         AgentCommandResult result = executeCommand(command, ctx);
         screenshotOutput_ = result.output;
         lastCapturePath_ = ctx.lastCapturePath;
+        lastBundlePath_ = ctx.lastBundlePath;
     }
 
     if (!screenshotOutput_.empty()) {
         ImGui::TextUnformatted(screenshotOutput_.data(),
                                screenshotOutput_.data() + screenshotOutput_.size());
+    }
+
+    ImGui::End();
+}
+
+void Editor::drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
+{
+    ImGui::SetNextWindowPos(ImVec2(650, 450), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 150), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Repro Bundle");
+
+    ImGui::InputText("Bundle Name", bundleBuffer_, sizeof(bundleBuffer_));
+    ImGui::SameLine();
+    if (ImGui::Button("Create Bundle")) {
+        AgentCommandContext ctx{scene, selected_, frame, fps, frameTimeMs, renderCommandCount, lastScriptPath_, renderer_, lastCapturePath_, lastBundlePath_};
+        std::string command = std::string("debug.bundle ") + bundleBuffer_;
+        AgentCommandResult result = executeCommand(command, ctx);
+        bundleOutput_ = result.output;
+        lastScriptPath_ = ctx.lastScriptPath;
+        lastCapturePath_ = ctx.lastCapturePath;
+        lastBundlePath_ = ctx.lastBundlePath;
+    }
+
+    if (!bundleOutput_.empty()) {
+        ImGui::TextUnformatted(bundleOutput_.data(),
+                               bundleOutput_.data() + bundleOutput_.size());
     }
 
     ImGui::End();
@@ -296,12 +326,12 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     ImGui::Begin("Diagnostics");
 
     if (ImGui::Button("Write Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_);
         DebugState::writeToFile(text);
     }
 
     if (ImGui::Button("Copy Debug State")) {
-        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_);
+        std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_);
         ImGui::SetClipboardText(text.c_str());
     }
 

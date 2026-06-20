@@ -3,6 +3,7 @@
 #include "capture/capture.h"
 #include "core/math.h"
 #include "core/object_id.h"
+#include "debug/bundle.h"
 #include "debug/debug_state.h"
 #include "renderer/render_context.h"
 #include "scene/camera.h"
@@ -501,6 +502,82 @@ int main()
         scene.createCamera({0.0f, 1.0f, 2.0f});
         std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, {}, "captures/shot.png");
         assert(text.find("Last Capture: captures/shot.png") != std::string::npos);
+    }
+
+    // Bundle path generation and validation.
+    {
+        std::string path = Bundle::makeBundlePath("cube_overlap");
+        assert(path == "bundles/cube_overlap/");
+
+        assert(Bundle::isValidBundleName("cube_overlap"));
+        assert(!Bundle::isValidBundleName(""));
+        assert(!Bundle::isValidBundleName("foo/bar"));
+        assert(!Bundle::isValidBundleName(".."));
+        assert(!Bundle::isValidBundleName("x/../y"));
+    }
+
+    // createBundle writes state.txt synchronously.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        std::string bundlePath;
+        assert(Bundle::createBundle("test_bundle", ctx, bundlePath));
+        assert(std::filesystem::exists(bundlePath + "state.txt"));
+
+        std::ifstream in(bundlePath + "state.txt");
+        std::string content((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+        assert(content.find("Workbench State") != std::string::npos);
+        assert(content.find("Camera") != std::string::npos);
+
+        std::filesystem::remove_all(bundlePath);
+    }
+
+    // debug.bundle command parsing and validation.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("debug.bundle", ctx);
+        assert(!result.success);
+        assert(result.output.find("Usage") != std::string::npos);
+
+        result = executeCommand("debug.bundle bad/name", ctx);
+        assert(!result.success);
+        assert(result.output.find("Invalid") != std::string::npos);
+
+        result = executeCommand("debug.bundle test_cmd", ctx);
+        assert(!result.success);
+        assert(result.output.find("Renderer not available") != std::string::npos);
+    }
+
+    // debug.bundle appears in command discovery.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("agent.commands", ctx);
+        assert(result.success);
+        assert(result.output.find("debug.bundle") != std::string::npos);
+
+        result = executeCommand("agent.help debug.bundle", ctx);
+        assert(result.success);
+        assert(result.output.find("debug.bundle <name>") != std::string::npos);
+    }
+
+    // DebugState reports last bundle path.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 0, scene, nullptr, {}, {}, "bundles/repro/");
+        assert(text.find("Last Bundle: bundles/repro/") != std::string::npos);
     }
 
     std::printf("All tests passed.\n");

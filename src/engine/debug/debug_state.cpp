@@ -56,7 +56,8 @@ std::string build(uint64_t frame,
                   const Scene& scene,
                   const GameObject* selected,
                   const std::string& lastScriptPath,
-                  const std::string& lastCapturePath)
+                  const std::string& lastCapturePath,
+                  const std::string& lastBundlePath)
 {
     std::ostringstream out;
     out << std::fixed << std::setprecision(1);
@@ -73,6 +74,9 @@ std::string build(uint64_t frame,
     }
     if (!lastCapturePath.empty()) {
         out << "Last Capture: " << lastCapturePath << "\n";
+    }
+    if (!lastBundlePath.empty()) {
+        out << "Last Bundle: " << lastBundlePath << "\n";
     }
     out << "\n";
 
