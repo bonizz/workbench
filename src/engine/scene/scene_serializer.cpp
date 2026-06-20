@@ -1,0 +1,375 @@
+#include "scene/scene_serializer.h"
+
+#include "scene/game_object.h"
+#include "scene/scene.h"
+#include "scene/transform.h"
+
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+
+namespace SceneSerializer {
+
+namespace {
+
+enum class TokenType {
+    End,
+    ObjectBegin,
+    ObjectEnd,
+    ArrayBegin,
+    ArrayEnd,
+    Colon,
+    Comma,
+    String,
+    Number,
+};
+
+struct Token {
+    TokenType type = TokenType::End;
+    std::string text;
+};
+
+class Tokenizer {
+public:
+    explicit Tokenizer(std::string text)
+        : text_(std::move(text))
+    {
+    }
+
+    Token next()
+    {
+        skipWhitespace();
+        if (pos_ >= text_.size()) {
+            return {TokenType::End, ""};
+        }
+
+        char c = text_[pos_];
+        switch (c) {
+            case '{': ++pos_; return {TokenType::ObjectBegin, "{"};
+            case '}': ++pos_; return {TokenType::ObjectEnd, "}"};
+            case '[': ++pos_; return {TokenType::ArrayBegin, "["};
+            case ']': ++pos_; return {TokenType::ArrayEnd, "]"};
+            case ':': ++pos_; return {TokenType::Colon, ":"};
+            case ',': ++pos_; return {TokenType::Comma, ","};
+            case '"': return readString();
+            default:
+                if (isNumberStart(c)) {
+                    return readNumber();
+                }
+                setError(std::string("Unexpected character: ") + c);
+                return {TokenType::End, ""};
+        }
+    }
+
+    bool hasError() const { return hasError_; }
+    const std::string& errorMessage() const { return errorMessage_; }
+
+private:
+    void skipWhitespace()
+    {
+        while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
+            ++pos_;
+        }
+    }
+
+    static bool isNumberStart(char c)
+    {
+        return std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '+' || c == '.';
+    }
+
+    Token readString()
+    {
+        ++pos_; // opening quote
+        size_t start = pos_;
+        while (pos_ < text_.size() && text_[pos_] != '"') {
+            ++pos_;
+        }
+        if (pos_ >= text_.size()) {
+            setError("Unterminated string");
+            return {TokenType::End, ""};
+        }
+        std::string value = text_.substr(start, pos_ - start);
+        ++pos_; // closing quote
+        return {TokenType::String, std::move(value)};
+    }
+
+    Token readNumber()
+    {
+        size_t start = pos_;
+        while (pos_ < text_.size()) {
+            char c = text_[pos_];
+            if (std::isspace(static_cast<unsigned char>(c)) || c == '{' || c == '}' ||
+                c == '[' || c == ']' || c == ':' || c == ',') {
+                break;
+            }
+            ++pos_;
+        }
+        return {TokenType::Number, text_.substr(start, pos_ - start)};
+    }
+
+    void setError(const std::string& message)
+    {
+        if (!hasError_) {
+            hasError_ = true;
+            errorMessage_ = message;
+        }
+    }
+
+    std::string text_;
+    size_t pos_ = 0;
+    bool hasError_ = false;
+    std::string errorMessage_;
+};
+
+class Parser {
+public:
+    explicit Parser(std::string text)
+        : tokenizer_(std::move(text))
+    {
+        current_ = tokenizer_.next();
+    }
+
+    bool parseInto(Scene& scene, std::string& error)
+    {
+        if (!expect(TokenType::ObjectBegin, error)) return false;
+        if (!expectString("objects", error)) return false;
+        if (!expect(TokenType::Colon, error)) return false;
+        if (!expect(TokenType::ArrayBegin, error)) return false;
+
+        while (current_.type != TokenType::ArrayEnd) {
+            if (!parseObject(scene, error)) return false;
+            if (current_.type == TokenType::Comma) {
+                advance();
+            } else if (current_.type != TokenType::ArrayEnd) {
+                error = "Expected ',' or ']' in objects array";
+                return false;
+            }
+        }
+
+        if (!expect(TokenType::ArrayEnd, error)) return false;
+        if (!expect(TokenType::ObjectEnd, error)) return false;
+        if (tokenizer_.hasError()) {
+            error = tokenizer_.errorMessage();
+            return false;
+        }
+        return true;
+    }
+
+private:
+    bool parseObject(Scene& scene, std::string& error)
+    {
+        if (!expect(TokenType::ObjectBegin, error)) return false;
+
+        std::string name = "Object";
+        Vec3 position{0.0f, 0.0f, 0.0f};
+        Vec3 rotation{0.0f, 0.0f, 0.0f};
+        Vec3 scale{1.0f, 1.0f, 1.0f};
+        simd::float4 color{1.0f, 1.0f, 1.0f, 1.0f};
+
+        bool firstField = true;
+        while (current_.type != TokenType::ObjectEnd) {
+            if (!firstField) {
+                if (current_.type == TokenType::Comma) {
+                    advance();
+                } else {
+                    error = "Expected ',' between object fields";
+                    return false;
+                }
+            }
+            firstField = false;
+
+            if (current_.type != TokenType::String) {
+                error = "Expected field name";
+                return false;
+            }
+            std::string field = current_.text;
+            advance();
+            if (!expect(TokenType::Colon, error)) return false;
+
+            if (field == "name") {
+                if (current_.type != TokenType::String) {
+                    error = "Expected string for name";
+                    return false;
+                }
+                name = current_.text;
+                advance();
+            } else if (field == "position") {
+                if (!parseFloat3(position, error)) return false;
+            } else if (field == "rotation") {
+                if (!parseFloat3(rotation, error)) return false;
+            } else if (field == "scale") {
+                if (!parseFloat3(scale, error)) return false;
+            } else if (field == "color") {
+                if (!parseFloat4(color, error)) return false;
+            } else {
+                error = "Unknown field: " + field;
+                return false;
+            }
+        }
+
+        if (!expect(TokenType::ObjectEnd, error)) return false;
+
+        GameObject* obj = scene.createObject(name);
+        obj->transform().position = position;
+        obj->transform().rotation = rotation;
+        obj->transform().scale = scale;
+        obj->color = color;
+        return true;
+    }
+
+    bool parseFloat3(Vec3& out, std::string& error)
+    {
+        if (!expect(TokenType::ArrayBegin, error)) return false;
+        if (!parseNumber(out.x, error)) return false;
+        if (!expect(TokenType::Comma, error)) return false;
+        if (!parseNumber(out.y, error)) return false;
+        if (!expect(TokenType::Comma, error)) return false;
+        if (!parseNumber(out.z, error)) return false;
+        if (!expect(TokenType::ArrayEnd, error)) return false;
+        return true;
+    }
+
+    bool parseFloat4(simd::float4& out, std::string& error)
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;
+        if (!expect(TokenType::ArrayBegin, error)) return false;
+        if (!parseNumber(x, error)) return false;
+        if (!expect(TokenType::Comma, error)) return false;
+        if (!parseNumber(y, error)) return false;
+        if (!expect(TokenType::Comma, error)) return false;
+        if (!parseNumber(z, error)) return false;
+        if (!expect(TokenType::Comma, error)) return false;
+        if (!parseNumber(w, error)) return false;
+        if (!expect(TokenType::ArrayEnd, error)) return false;
+        out = {x, y, z, w};
+        return true;
+    }
+
+    bool parseNumber(float& out, std::string& error)
+    {
+        if (current_.type != TokenType::Number) {
+            error = "Expected number";
+            return false;
+        }
+        try {
+            size_t idx = 0;
+            out = std::stof(current_.text, &idx);
+            if (idx != current_.text.size()) {
+                error = "Invalid number: " + current_.text;
+                return false;
+            }
+        } catch (...) {
+            error = "Invalid number: " + current_.text;
+            return false;
+        }
+        advance();
+        return true;
+    }
+
+    bool expectString(const std::string& value, std::string& error)
+    {
+        if (current_.type != TokenType::String || current_.text != value) {
+            error = "Expected '" + value + "'";
+            return false;
+        }
+        advance();
+        return true;
+    }
+
+    bool expect(TokenType type, std::string& error)
+    {
+        if (current_.type != type) {
+            error = "Unexpected token";
+            return false;
+        }
+        advance();
+        return true;
+    }
+
+    void advance()
+    {
+        if (!tokenizer_.hasError()) {
+            current_ = tokenizer_.next();
+        }
+    }
+
+    Tokenizer tokenizer_;
+    Token current_;
+};
+
+} // namespace
+
+bool save(const Scene& scene, const std::string& path, std::string& error)
+{
+    std::filesystem::path filePath(path);
+    try {
+        std::filesystem::create_directories(filePath.parent_path());
+    } catch (const std::exception& e) {
+        error = std::string("Failed to create directory: ") + e.what();
+        return false;
+    }
+
+    std::ofstream out(filePath);
+    if (!out.is_open()) {
+        error = "Failed to open file for writing: " + path;
+        return false;
+    }
+
+    out << std::fixed << std::setprecision(4);
+    out << "{\n";
+    out << "  \"objects\": [\n";
+
+    bool first = true;
+    for (const auto& obj : scene.objects()) {
+        if (scene.isCamera(obj.get())) {
+            continue;
+        }
+
+        if (!first) {
+            out << ",\n";
+        }
+        first = false;
+
+        const Transform& t = obj->transform();
+        out << "    { ";
+        out << "\"name\": \"" << obj->name() << "\", ";
+        out << "\"position\": [" << t.position.x << ", " << t.position.y << ", " << t.position.z << "], ";
+        out << "\"rotation\": [" << t.rotation.x << ", " << t.rotation.y << ", " << t.rotation.z << "], ";
+        out << "\"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "], ";
+        out << "\"color\": [" << obj->color.x << ", " << obj->color.y << ", " << obj->color.z << ", " << obj->color.w << "]";
+        out << " }";
+    }
+
+    out << "\n  ]\n";
+    out << "}\n";
+    return true;
+}
+
+bool load(Scene& scene, const std::string& path, std::string& error)
+{
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        error = "Failed to open file for reading: " + path;
+        return false;
+    }
+
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (in.fail() && !in.eof()) {
+        error = "Failed to read file: " + path;
+        return false;
+    }
+
+    scene.clearObjects();
+
+    Parser parser(std::move(text));
+    if (!parser.parseInto(scene, error)) {
+        return false;
+    }
+
+    return true;
+}
+
+} // namespace SceneSerializer
