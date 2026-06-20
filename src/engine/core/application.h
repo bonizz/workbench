@@ -1,5 +1,6 @@
 #pragma once
 
+#include "agent/test_suite.h"
 #include "core/cli_options.h"
 #include "core/input_state.h"
 #include "core/time.h"
@@ -8,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 
 class Window;
 class MetalRenderer;
@@ -49,7 +51,9 @@ public:
     void onScroll(float delta);
 
 private:
+    void recreateScene();
     void runAutomation();
+    void runTestSuite();
     void waitForPendingScreenshot();
 
     std::unique_ptr<Window> window_;

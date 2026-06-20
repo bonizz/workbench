@@ -43,7 +43,8 @@ bool createBundle(const std::string& name, AgentCommandContext& ctx, std::string
 
     std::string stateText = DebugState::build(
         ctx.frame, ctx.fps, ctx.frameTimeMs, ctx.renderCommandCount,
-        ctx.scene, ctx.selected, ctx.lastScriptPath, ctx.lastCapturePath);
+        ctx.scene, ctx.selected, ctx.lastScriptPath, ctx.lastCapturePath,
+        ctx.lastBundlePath, ctx.lastAssertionFailure);
 
     DebugState::writeToFile(stateText, outPath + "state.txt");
 

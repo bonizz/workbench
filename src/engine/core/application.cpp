@@ -1,5 +1,6 @@
 #include "core/application.h"
 #include "agent/command.h"
+#include "agent/test_suite.h"
 #include "core/math.h"
 #include "platform/window.h"
 #include "renderer/metal_renderer.h"
@@ -79,6 +80,19 @@ void Application::shutdown()
     scene_.reset();
 }
 
+void Application::recreateScene()
+{
+    scene_ = std::make_unique<Scene>();
+    scene_->createCamera({0.0f, 3.0f, 5.0f});
+    scene_->camera().setActive(false);
+    if (renderer_) {
+        scene_->camera().setAspect(renderer_->aspectRatio());
+    }
+    if (editor_) {
+        editor_->setSelected(nullptr);
+    }
+}
+
 void Application::onResize(float width, float height, float scale)
 {
     if (renderer_) {
@@ -104,6 +118,43 @@ void Application::waitForPendingScreenshot()
             break;
         }
         std::this_thread::sleep_for(50ms);
+    }
+}
+
+void Application::runTestSuite()
+{
+    auto tests = TestSuite::discoverTests("assets/tests");
+    TestSuite::Summary summary;
+
+    for (const auto& path : tests) {
+        recreateScene();
+        lastAssertionFailure_.clear();
+
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{*scene_, selected, frame_, fps_, frameTimeMs_,
+                                lastRenderCommandCount_, {}, renderer_.get(),
+                                {}, {}, &lastAssertionFailure_};
+
+        TestSuite::Result result = TestSuite::runTestFile(*scene_, ctx, path);
+
+        if (!result.passed) {
+            TestSuite::createFailureBundle(result.name, ctx, result.bundlePath);
+        }
+
+        std::printf("%s %s\n", result.passed ? "PASS" : "FAIL", result.name.c_str());
+        if (!result.passed && !result.failure.empty()) {
+            std::printf("      %s\n", result.failure.c_str());
+        }
+
+        summary.results.push_back(std::move(result));
+    }
+
+    std::printf("\nSummary:\n");
+    std::printf("Passed: %zu\n", summary.passedCount());
+    std::printf("Failed: %zu\n", summary.failedCount());
+
+    if (!summary.allPassed()) {
+        automationFailed_ = true;
     }
 }
 
@@ -162,9 +213,12 @@ void Application::onUpdate(float deltaTime)
 
     switch (automationState_) {
         case AutomationState::Pending: {
-            bool hasWork = !cliOptions_.runScript.empty() || !cliOptions_.bundleName.empty();
-            if (hasWork) {
+            bool hasWork = !cliOptions_.runScript.empty() || !cliOptions_.bundleName.empty() || cliOptions_.runTests;
+            if (!cliOptions_.runScript.empty() || !cliOptions_.bundleName.empty()) {
                 runAutomation();
+            }
+            if (cliOptions_.runTests) {
+                runTestSuite();
             }
 
             if (hasWork && cliOptions_.autoExit) {

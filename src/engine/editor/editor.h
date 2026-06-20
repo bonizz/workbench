@@ -28,6 +28,7 @@ public:
     void setRenderer(MetalRenderer* renderer) { renderer_ = renderer; }
 
     const GameObject* selected() const { return selected_; }
+    void setSelected(GameObject* obj) { selected_ = obj; }
 
 private:
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);

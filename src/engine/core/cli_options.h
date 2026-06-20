@@ -6,6 +6,7 @@ struct CliOptions
 {
     std::string runScript;
     std::string bundleName;
+    bool runTests = false;
     bool autoExit = false;
     int extraFrames = 3;
 };

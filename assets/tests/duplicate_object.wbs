@@ -1,0 +1,3 @@
+scene.create_cube Original
+scene.duplicate 2
+assert.object_exists Original Copy

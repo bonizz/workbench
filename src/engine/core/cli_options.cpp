@@ -56,6 +56,8 @@ CliOptions parseCliOptions(int argc, const char* argv[])
             readNext(argc, argv, i, options.runScript);
         } else if (isFlag(arg, "--bundle")) {
             readNext(argc, argv, i, options.bundleName);
+        } else if (isFlag(arg, "--run-tests")) {
+            options.runTests = true;
         } else if (isFlag(arg, "--exit")) {
             options.autoExit = true;
         } else if (isFlag(arg, "--frames")) {
