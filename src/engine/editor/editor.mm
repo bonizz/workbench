@@ -160,11 +160,11 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
     ImGui::Separator();
 
     ImVec2 outputSize = ImGui::GetContentRegionAvail();
-    ImGui::InputTextMultiline("##output",
-                              consoleOutput_.data(),
-                              consoleOutput_.size(),
-                              outputSize,
-                              ImGuiInputTextFlags_ReadOnly);
+    if (ImGui::BeginChild("##output", outputSize, false, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::TextUnformatted(consoleOutput_.data(),
+                               consoleOutput_.data() + consoleOutput_.size());
+    }
+    ImGui::EndChild();
 
     ImGui::End();
 }
