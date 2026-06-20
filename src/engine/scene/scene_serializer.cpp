@@ -1,6 +1,7 @@
 #include "scene/scene_serializer.h"
 
 #include "scene/game_object.h"
+#include "scene/mesh_renderer.h"
 #include "scene/scene.h"
 #include "scene/transform.h"
 
@@ -10,6 +11,9 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+
+using scene::Component;
+using scene::MeshRenderer;
 
 namespace SceneSerializer {
 
@@ -126,8 +130,9 @@ private:
 
 class Parser {
 public:
-    explicit Parser(std::string text)
+    Parser(std::string text, std::string* warning)
         : tokenizer_(std::move(text))
+        , warning_(warning)
     {
         current_ = tokenizer_.next();
     }
@@ -167,7 +172,7 @@ private:
         Vec3 position{0.0f, 0.0f, 0.0f};
         Vec3 rotation{0.0f, 0.0f, 0.0f};
         Vec3 scale{1.0f, 1.0f, 1.0f};
-        simd::float4 color{1.0f, 1.0f, 1.0f, 1.0f};
+        std::vector<std::unique_ptr<Component>> components;
 
         bool firstField = true;
         while (current_.type != TokenType::ObjectEnd) {
@@ -202,8 +207,8 @@ private:
                 if (!parseFloat3(rotation, error)) return false;
             } else if (field == "scale") {
                 if (!parseFloat3(scale, error)) return false;
-            } else if (field == "color") {
-                if (!parseFloat4(color, error)) return false;
+            } else if (field == "components") {
+                if (!parseComponents(components, error)) return false;
             } else {
                 error = "Unknown field: " + field;
                 return false;
@@ -216,7 +221,96 @@ private:
         obj->transform().position = position;
         obj->transform().rotation = rotation;
         obj->transform().scale = scale;
-        obj->color = color;
+        for (auto& comp : components) {
+            obj->addComponent(std::move(comp));
+        }
+
+        if (!obj->hasComponent<MeshRenderer>()) {
+            addWarning("Object '" + name + "' has no MeshRenderer and will not render.");
+        }
+
+        return true;
+    }
+
+    bool parseComponents(std::vector<std::unique_ptr<Component>>& out, std::string& error)
+    {
+        if (!expect(TokenType::ArrayBegin, error)) return false;
+
+        while (current_.type != TokenType::ArrayEnd) {
+            if (!parseComponent(out, error)) return false;
+            if (current_.type == TokenType::Comma) {
+                advance();
+            } else if (current_.type != TokenType::ArrayEnd) {
+                error = "Expected ',' or ']' in components array";
+                return false;
+            }
+        }
+
+        return expect(TokenType::ArrayEnd, error);
+    }
+
+    bool parseComponent(std::vector<std::unique_ptr<Component>>& out, std::string& error)
+    {
+        if (!expect(TokenType::ObjectBegin, error)) return false;
+
+        std::string type;
+        simd::float4 color{1.0f, 1.0f, 1.0f, 1.0f};
+        std::string mesh = "cube";
+
+        bool firstField = true;
+        while (current_.type != TokenType::ObjectEnd) {
+            if (!firstField) {
+                if (current_.type == TokenType::Comma) {
+                    advance();
+                } else {
+                    error = "Expected ',' between component fields";
+                    return false;
+                }
+            }
+            firstField = false;
+
+            if (current_.type != TokenType::String) {
+                error = "Expected component field name";
+                return false;
+            }
+            std::string field = current_.text;
+            advance();
+            if (!expect(TokenType::Colon, error)) return false;
+
+            if (field == "type") {
+                if (current_.type != TokenType::String) {
+                    error = "Expected string for component type";
+                    return false;
+                }
+                type = current_.text;
+                advance();
+            } else if (field == "mesh") {
+                if (current_.type != TokenType::String) {
+                    error = "Expected string for mesh";
+                    return false;
+                }
+                mesh = current_.text;
+                advance();
+            } else if (field == "color") {
+                if (!parseFloat4(color, error)) return false;
+            } else {
+                error = "Unknown component field: " + field;
+                return false;
+            }
+        }
+
+        if (!expect(TokenType::ObjectEnd, error)) return false;
+
+        if (type == "MeshRenderer") {
+            auto meshRenderer = std::make_unique<MeshRenderer>();
+            meshRenderer->mesh = mesh;
+            meshRenderer->color = color;
+            out.push_back(std::move(meshRenderer));
+        } else {
+            error = "Unknown component type: " + type;
+            return false;
+        }
+
         return true;
     }
 
@@ -296,8 +390,18 @@ private:
         }
     }
 
+    void addWarning(const std::string& message)
+    {
+        if (!warning_) return;
+        if (!warning_->empty()) {
+            *warning_ += "\n";
+        }
+        *warning_ += message;
+    }
+
     Tokenizer tokenizer_;
     Token current_;
+    std::string* warning_ = nullptr;
 };
 
 } // namespace
@@ -339,8 +443,20 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
         out << "\"position\": [" << t.position.x << ", " << t.position.y << ", " << t.position.z << "], ";
         out << "\"rotation\": [" << t.rotation.x << ", " << t.rotation.y << ", " << t.rotation.z << "], ";
         out << "\"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "], ";
-        out << "\"color\": [" << obj->color.x << ", " << obj->color.y << ", " << obj->color.z << ", " << obj->color.w << "]";
-        out << " }";
+        out << "\"components\": [";
+
+        bool firstComp = true;
+        for (const auto& comp : obj->components()) {
+            if (auto* mesh = dynamic_cast<const MeshRenderer*>(comp.get())) {
+                if (!firstComp) out << ", ";
+                firstComp = false;
+                out << "{\"type\": \"MeshRenderer\", ";
+                out << "\"mesh\": \"" << mesh->mesh << "\", ";
+                out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
+            }
+        }
+
+        out << "] }";
     }
 
     out << "\n  ]\n";
@@ -348,7 +464,7 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
     return true;
 }
 
-bool load(Scene& scene, const std::string& path, std::string& error)
+bool load(Scene& scene, const std::string& path, std::string& error, std::string* warning)
 {
     std::ifstream in(path);
     if (!in.is_open()) {
@@ -364,7 +480,7 @@ bool load(Scene& scene, const std::string& path, std::string& error)
 
     scene.clearObjects();
 
-    Parser parser(std::move(text));
+    Parser parser(std::move(text), warning);
     if (!parser.parseInto(scene, error)) {
         return false;
     }

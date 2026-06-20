@@ -5,6 +5,7 @@
 #include "renderer/render_context.h"
 #include "scene/camera.h"
 #include "scene/game_object.h"
+#include "scene/mesh_renderer.h"
 #include "scene/scene.h"
 #include "scene/scene_serializer.h"
 #include "scene/transform.h"
@@ -14,6 +15,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+
+using scene::MeshRenderer;
 
 int main()
 {
@@ -188,14 +191,18 @@ int main()
         GameObject* a = scene.createObject("A");
         a->transform().position = {1.0f, 2.0f, 3.0f};
         a->transform().scale = {2.0f, 2.0f, 2.0f};
-        a->color = {0.1f, 0.2f, 0.3f, 0.4f};
+        auto meshA = std::make_unique<MeshRenderer>();
+        meshA->color = {0.1f, 0.2f, 0.3f, 0.4f};
+        a->addComponent(std::move(meshA));
 
         GameObject* copy = scene.duplicateObject(a);
         assert(copy != nullptr);
         assert(copy->name() == "A Copy");
         assert(copy->transform().position.x == 1.0f);
         assert(copy->transform().scale.x == 2.0f);
-        assert(copy->color.x == 0.1f);
+        MeshRenderer* copyMesh = copy->getComponent<MeshRenderer>();
+        assert(copyMesh != nullptr);
+        assert(copyMesh->color.x == 0.1f);
         assert(scene.objects().size() == 3);
 
         assert(scene.deleteObject(a));
@@ -212,7 +219,9 @@ int main()
         a->transform().position = {1.5f, 2.5f, 3.5f};
         a->transform().rotation = {0.1f, 0.2f, 0.3f};
         a->transform().scale = {2.0f, 1.0f, 0.5f};
-        a->color = {0.1f, 0.2f, 0.3f, 0.4f};
+        auto meshA = std::make_unique<MeshRenderer>();
+        meshA->color = {0.1f, 0.2f, 0.3f, 0.4f};
+        a->addComponent(std::move(meshA));
 
         const char* path = "build/tests/test_scene.scene";
         std::string error;
@@ -242,10 +251,12 @@ int main()
         assert(loadedA->transform().scale.x == 2.0f);
         assert(loadedA->transform().scale.y == 1.0f);
         assert(loadedA->transform().scale.z == 0.5f);
-        assert(loadedA->color.x == 0.1f);
-        assert(loadedA->color.y == 0.2f);
-        assert(loadedA->color.z == 0.3f);
-        assert(loadedA->color.w == 0.4f);
+        MeshRenderer* loadedMesh = loadedA->getComponent<MeshRenderer>();
+        assert(loadedMesh != nullptr);
+        assert(loadedMesh->color.x == 0.1f);
+        assert(loadedMesh->color.y == 0.2f);
+        assert(loadedMesh->color.z == 0.3f);
+        assert(loadedMesh->color.w == 0.4f);
 
         std::filesystem::remove(path);
     }
@@ -286,6 +297,62 @@ int main()
         assert(scene.objects().size() == 2);
 
         std::filesystem::remove("assets/scenes/test_cmd.scene");
+    }
+
+    // Component agent commands.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* obj = scene.createObject("Plain");
+        (void)obj;
+
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("component.list 2", ctx);
+        assert(result.success);
+        assert(result.output.find("(none)") != std::string::npos);
+
+        result = executeCommand("component.add_mesh_renderer 2", ctx);
+        assert(result.success);
+        assert(obj->hasComponent<MeshRenderer>());
+
+        result = executeCommand("component.list 2", ctx);
+        assert(result.success);
+        assert(result.output.find("MeshRenderer") != std::string::npos);
+
+        result = executeCommand("component.add_mesh_renderer 2", ctx);
+        assert(!result.success);
+    }
+
+    // Load warns about objects with no MeshRenderer.
+    {
+        const char* path = "build/tests/warning_scene.scene";
+        std::ofstream out(path);
+        out << R"({"objects": [{"name": "Invisible", "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "components": []}]})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        std::string warning;
+        assert(SceneSerializer::load(scene, path, error, &warning));
+        assert(!warning.empty());
+        assert(warning.find("Invisible") != std::string::npos);
+        assert(warning.find("no MeshRenderer") != std::string::npos);
+
+        std::filesystem::remove(path);
+    }
+
+    // DebugState lists components.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 1.0f, 2.0f});
+        GameObject* cube = scene.createObject("Cube");
+        cube->addComponent(std::make_unique<MeshRenderer>());
+
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 2, scene, nullptr);
+        assert(text.find("components: MeshRenderer") != std::string::npos);
     }
 
     // DebugState includes loaded scene filename.

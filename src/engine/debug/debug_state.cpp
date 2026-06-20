@@ -2,8 +2,11 @@
 
 #include "scene/scene.h"
 #include "scene/game_object.h"
+#include "scene/mesh_renderer.h"
 #include "scene/transform.h"
 #include "core/math.h"
+
+using scene::MeshRenderer;
 
 #include <algorithm>
 #include <filesystem>
@@ -71,7 +74,18 @@ std::string build(uint64_t frame,
         out << "  position: " << formatVec3(obj->transform().position) << "\n";
         out << "  rotation: " << formatVec3(toDegrees(obj->transform().rotation)) << "\n";
         out << "  scale:    " << formatVec3(obj->transform().scale) << "\n";
-        out << "\n";
+        out << "  components: ";
+        if (obj->components().empty()) {
+            out << "none";
+        } else {
+            bool first = true;
+            for (const auto& comp : obj->components()) {
+                if (!first) out << ", ";
+                first = false;
+                out << comp->typeName();
+            }
+        }
+        out << "\n\n";
     }
 
     out << "Editor:\n";

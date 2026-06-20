@@ -6,6 +6,9 @@
 #include "editor/editor.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
+#include "scene/mesh_renderer.h"
+
+using scene::MeshRenderer;
 
 #include "imgui/imgui.h"
 
@@ -38,7 +41,9 @@ bool Application::init()
     GameObject* cube = scene_->createObject("Cube");
     cube->transform().position = {0.0f, 0.5f, 0.0f};
     cube->transform().scale = {0.5f, 0.5f, 0.5f};
-    cube->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    auto mesh = std::make_unique<MeshRenderer>();
+    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    cube->addComponent(std::move(mesh));
 
     onResize(window_->width(), window_->height(), window_->backingScale());
     return true;

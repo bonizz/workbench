@@ -45,6 +45,8 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `scene.duplicate <id>` | Duplicate the object with the given id. |
 | `scene.save <filename>` | Save authored objects to `assets/scenes/<filename>`. |
 | `scene.load <filename>` | Load authored objects from `assets/scenes/<filename>`. |
+| `component.list <id>` | List components attached to a GameObject. |
+| `component.add_mesh_renderer <id>` | Add a MeshRenderer component to a GameObject. |
 | `transform.get <id>` | Show position, rotation, and scale of an object. |
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |

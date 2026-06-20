@@ -1,9 +1,14 @@
 #pragma once
 
 #include "core/object_id.h"
+#include "scene/component.h"
 #include "scene/transform.h"
-#include <simd/simd.h>
+
+#include <memory>
 #include <string>
+#include <vector>
+
+namespace scene { class MeshRenderer; }
 
 class GameObject
 {
@@ -22,12 +27,54 @@ public:
     bool active() const { return active_; }
     void setActive(bool active) { active_ = active; }
 
-    // Placeholder for future material/component system.
-    simd::float4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+    // Component ownership.
+    scene::Component* addComponent(std::unique_ptr<scene::Component> component);
+
+    template<typename T>
+    T* getComponent();
+
+    template<typename T>
+    const T* getComponent() const;
+
+    template<typename T>
+    bool hasComponent() const;
+
+    const std::vector<std::unique_ptr<scene::Component>>& components() const { return components_; }
 
 private:
     ObjectId id_;
     std::string name_;
     Transform transform_;
     bool active_ = true;
+    std::vector<std::unique_ptr<scene::Component>> components_;
 };
+
+// Inline template definitions must be in the header because the type is not known here.
+template<typename T>
+T* GameObject::getComponent()
+{
+    for (const auto& comp : components_) {
+        if (T* typed = dynamic_cast<T*>(comp.get())) {
+            return typed;
+        }
+    }
+    return nullptr;
+}
+
+template<typename T>
+const T* GameObject::getComponent() const
+{
+    for (const auto& comp : components_) {
+        if (const T* typed = dynamic_cast<const T*>(comp.get())) {
+            return typed;
+        }
+    }
+    return nullptr;
+}
+
+template<typename T>
+bool GameObject::hasComponent() const
+{
+    return getComponent<T>() != nullptr;
+}
+

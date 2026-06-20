@@ -1,8 +1,11 @@
 #include "editor/editor.h"
 #include "agent/command.h"
 #include "debug/debug_state.h"
+#include "scene/mesh_renderer.h"
 #include "scene/scene.h"
 #include "scene/game_object.h"
+
+using scene::MeshRenderer;
 
 #include <cstdio>
 
@@ -106,6 +109,11 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
 
     if (ImGui::Button("Create Cube")) {
         GameObject* obj = scene.createObject("Cube");
+        obj->transform().position = {0.0f, 0.5f, 0.0f};
+        obj->transform().scale = {0.5f, 0.5f, 0.5f};
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+        obj->addComponent(std::move(mesh));
         selected_ = obj;
         std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
     }
@@ -136,7 +144,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
 void Editor::drawInspector()
 {
     ImGui::SetNextWindowPos(ImVec2(10, 220), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(260, 260), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(260, 300), ImGuiCond_FirstUseEver);
     ImGui::Begin("Inspector");
 
     if (!selected_) {
@@ -161,6 +169,27 @@ void Editor::drawInspector()
     ImGui::DragFloat3("Position", &position.x, 0.1f);
     ImGui::DragFloat3("Rotation", &rotation.x, 0.05f);
     ImGui::DragFloat3("Scale", &scale.x, 0.05f);
+
+    ImGui::Separator();
+    ImGui::Text("Components");
+
+    if (MeshRenderer* mesh = selected_->getComponent<MeshRenderer>()) {
+        ImGui::Text("MeshRenderer");
+        float color[4] = {mesh->color.x, mesh->color.y, mesh->color.z, mesh->color.w};
+        if (ImGui::ColorEdit4("Color", color)) {
+            mesh->color = {color[0], color[1], color[2], color[3]};
+        }
+    }
+
+    ImGui::Separator();
+
+    ImGui::BeginDisabled(selected_->hasComponent<MeshRenderer>());
+    if (ImGui::Button("Add MeshRenderer")) {
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+        selected_->addComponent(std::move(mesh));
+    }
+    ImGui::EndDisabled();
 
     ImGui::End();
 }

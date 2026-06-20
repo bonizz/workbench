@@ -1,6 +1,10 @@
 #include "scene/scene.h"
 
+#include "scene/mesh_renderer.h"
+
 #include <algorithm>
+
+using scene::MeshRenderer;
 
 GameObject* Scene::createObject(const std::string& name)
 {
@@ -40,7 +44,9 @@ void Scene::buildRenderCommands(RenderContext& ctx) const
 
     for (const auto& obj : objects_) {
         if (!obj->active()) continue;
-        ctx.drawCube(obj->transform().localMatrix(), obj->color);
+        if (MeshRenderer* mesh = obj->getComponent<MeshRenderer>()) {
+            ctx.drawCube(obj->transform().localMatrix(), mesh->color);
+        }
     }
 }
 
@@ -70,7 +76,9 @@ GameObject* Scene::duplicateObject(GameObject* obj)
 
     GameObject* copy = createObject(obj->name() + " Copy");
     copy->transform() = obj->transform();
-    copy->color = obj->color;
+    for (const auto& comp : obj->components()) {
+        copy->addComponent(comp->clone());
+    }
     return copy;
 }
 

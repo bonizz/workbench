@@ -3,9 +3,12 @@
 #include "core/math.h"
 #include "debug/debug_state.h"
 #include "scene/game_object.h"
+#include "scene/mesh_renderer.h"
 #include "scene/scene.h"
 #include "scene/scene_serializer.h"
 #include "scene/transform.h"
+
+using scene::MeshRenderer;
 
 #include <algorithm>
 #include <charconv>
@@ -236,6 +239,11 @@ AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
     }
 
     GameObject* obj = ctx.scene.createObject(name);
+    obj->transform().position = {0.0f, 0.5f, 0.0f};
+    obj->transform().scale = {0.5f, 0.5f, 0.5f};
+    auto mesh = std::make_unique<MeshRenderer>();
+    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    obj->addComponent(std::move(mesh));
     ctx.selected = obj;
 
     std::ostringstream oss;
@@ -330,13 +338,71 @@ AgentCommandResult cmdSceneLoad(const std::vector<std::string>& args,
     }
 
     std::string error;
-    if (!SceneSerializer::load(ctx.scene, path, error)) {
+    std::string warning;
+    if (!SceneSerializer::load(ctx.scene, path, error, &warning)) {
         return makeError(error);
     }
 
     ctx.selected = nullptr;
     ctx.scene.setLoadedScenePath(args[1]);
-    return makeSuccess("Loaded scene from " + path);
+
+    std::ostringstream oss;
+    oss << "Loaded scene from " << path;
+    if (!warning.empty()) {
+        oss << "\nWarning:\n" << warning;
+    }
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdComponentList(const std::vector<std::string>& args,
+                                    AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: component.list <id>");
+    }
+    uint64_t id = 0;
+    if (!parseUint64(args[1], id)) {
+        return makeError("Invalid object id: " + args[1]);
+    }
+    GameObject* obj = ctx.scene.findObjectById(id);
+    if (!obj) {
+        return makeError("Object not found: " + args[1]);
+    }
+
+    std::ostringstream oss;
+    oss << "Components on " << obj->name() << " [" << id << "]:\n";
+    if (obj->components().empty()) {
+        oss << "  (none)\n";
+    } else {
+        for (const auto& comp : obj->components()) {
+            oss << "  " << comp->typeName() << "\n";
+        }
+    }
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdComponentAddMeshRenderer(const std::vector<std::string>& args,
+                                               AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: component.add_mesh_renderer <id>");
+    }
+    uint64_t id = 0;
+    if (!parseUint64(args[1], id)) {
+        return makeError("Invalid object id: " + args[1]);
+    }
+    GameObject* obj = ctx.scene.findObjectById(id);
+    if (!obj) {
+        return makeError("Object not found: " + args[1]);
+    }
+    if (obj->hasComponent<MeshRenderer>()) {
+        return makeError(obj->name() + " already has a MeshRenderer");
+    }
+
+    auto mesh = std::make_unique<MeshRenderer>();
+    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    obj->addComponent(std::move(mesh));
+    return makeSuccess("Added MeshRenderer to " + obj->name() + " [" + args[1] + "]");
 }
 
 const std::vector<CommandEntry>& commandTable();
@@ -437,6 +503,16 @@ const std::vector<CommandEntry>& commandTable()
           "Loads authored objects from assets/scenes/<filename>.",
           "scene.load test.scene"},
          cmdSceneLoad},
+        {{"component.list",
+          "component.list <id>",
+          "Lists components attached to a GameObject.",
+          "component.list 2"},
+         cmdComponentList},
+        {{"component.add_mesh_renderer",
+          "component.add_mesh_renderer <id>",
+          "Adds a MeshRenderer component to a GameObject.",
+          "component.add_mesh_renderer 2"},
+         cmdComponentAddMeshRenderer},
         {{"transform.get",
           "transform.get <id>",
           "Shows the transform of a GameObject.",
