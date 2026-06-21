@@ -68,7 +68,7 @@ project "sandbox"
 
     system "macosx"
 
-    includedirs { "src", "src/engine", "external" }
+    includedirs { "src", "src/engine", "src/ext", "external" }
 
     links {
         "Cocoa.framework",
@@ -147,7 +147,7 @@ project "tests"
     system "macosx"
     architecture "arm64"
 
-    includedirs { "src", "src/engine", "external" }
+    includedirs { "src", "src/engine", "src/ext", "external" }
 
     links {
         "Cocoa.framework",

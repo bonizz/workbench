@@ -797,7 +797,7 @@ int main()
         struct SettingsPathGuard {
             std::string previous;
             std::string path;
-            SettingsPathGuard(const std::string& p) : previous("settings.txt"), path(p) {
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
                 Settings::setSettingsPath(p);
             }
             ~SettingsPathGuard() {
@@ -806,7 +806,7 @@ int main()
             }
         };
 
-        const char* path = "build/tests/test_settings.txt";
+        const char* path = "build/tests/test_settings.json";
         SettingsPathGuard guard(path);
         (void)guard;
 
@@ -824,7 +824,7 @@ int main()
         struct SettingsPathGuard {
             std::string previous;
             std::string path;
-            SettingsPathGuard(const std::string& p) : previous("settings.txt"), path(p) {
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
                 Settings::setSettingsPath(p);
             }
             ~SettingsPathGuard() {
@@ -833,7 +833,7 @@ int main()
             }
         };
 
-        const char* path = "build/tests/test_editor_settings.txt";
+        const char* path = "build/tests/test_editor_settings.json";
         SettingsPathGuard guard(path);
         (void)guard;
 
@@ -852,6 +852,17 @@ int main()
         assert(states["Hierarchy"] == true);
         assert(states["Inspector"] == false);
         assert(states["AgentConsole"] == true);
+
+        // The file should be JSON with both window and editor sections.
+        {
+            std::ifstream in(path);
+            std::string content((std::istreambuf_iterator<char>(in)),
+                                 std::istreambuf_iterator<char>());
+            assert(content.find("\"window\"") != std::string::npos);
+            assert(content.find("\"editor\"") != std::string::npos);
+            assert(content.find("\"show_Hierarchy\"") != std::string::npos);
+            assert(content.find("\"show_Inspector\"") != std::string::npos);
+        }
 
         // Updating the window size must keep the editor state keys.
         Settings::saveWindowSize(1280, 720);

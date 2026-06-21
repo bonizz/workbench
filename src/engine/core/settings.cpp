@@ -1,142 +1,91 @@
 #include "core/settings.h"
 
-#include <algorithm>
-#include <cctype>
+#include "json/json.hpp"
+
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <string>
 
 namespace Settings {
 
 namespace {
 
-std::string gSettingsPath = "settings.txt";
+using json = nlohmann::json;
 
-std::string trim(std::string s)
-{
-    auto notSpace = [](unsigned char c) { return !std::isspace(c); };
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
-    s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
-    return s;
-}
+std::string gSettingsPath = "settings.json";
 
-std::string toLower(std::string s)
+json loadJson()
 {
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return s;
-}
-
-bool parseBool(const std::string& value)
-{
-    std::string lower = toLower(trim(value));
-    return lower == "true" || lower == "1";
-}
-
-std::string boolToString(bool value)
-{
-    return value ? "true" : "false";
-}
-
-std::map<std::string, std::string> loadAll()
-{
-    std::map<std::string, std::string> values;
+    json j = json::object();
     if (!std::filesystem::exists(gSettingsPath)) {
-        return values;
+        return j;
     }
 
     std::ifstream file(gSettingsPath);
     if (!file) {
-        return values;
+        return j;
     }
 
-    std::string line;
-    while (std::getline(file, line)) {
-        std::string trimmed = trim(line);
-        if (trimmed.empty() || trimmed.front() == '#') {
-            continue;
-        }
-
-        auto equals = trimmed.find('=');
-        if (equals == std::string::npos) {
-            continue;
-        }
-
-        std::string key = trim(trimmed.substr(0, equals));
-        std::string value = trim(trimmed.substr(equals + 1));
-        if (!key.empty()) {
-            values[key] = value;
-        }
+    try {
+        file >> j;
+    } catch (...) {
+        // Corrupt or empty file: start fresh.
+        j = json::object();
     }
 
-    return values;
+    return j;
 }
 
-void saveAll(const std::map<std::string, std::string>& values)
+void saveJson(const json& j)
 {
     std::ofstream file(gSettingsPath);
     if (!file) {
         return;
     }
 
-    file << "# Workbench settings\n";
-    for (const auto& [key, value] : values) {
-        file << key << "=" << value << "\n";
-    }
+    file << j.dump(4) << "\n";
 }
 
 } // namespace
 
 bool loadWindowSize(int& width, int& height)
 {
-    auto values = loadAll();
+    json j = loadJson();
+    json window = j.value("window", json::object());
 
-    bool gotWidth = false;
-    bool gotHeight = false;
-
-    try {
-        auto it = values.find("window_width");
-        if (it != values.end()) {
-            width = std::stoi(it->second);
-            gotWidth = true;
-        }
-
-        it = values.find("window_height");
-        if (it != values.end()) {
-            height = std::stoi(it->second);
-            gotHeight = true;
-        }
-    } catch (...) {
-        // Ignore malformed values.
+    if (!window.contains("width") || !window.contains("height")) {
+        return false;
     }
 
-    return gotWidth && gotHeight;
+    try {
+        width = window["width"].get<int>();
+        height = window["height"].get<int>();
+    } catch (...) {
+        return false;
+    }
+
+    return true;
 }
 
 void saveWindowSize(int width, int height)
 {
-    auto values = loadAll();
-    values["window_width"] = std::to_string(width);
-    values["window_height"] = std::to_string(height);
-    saveAll(values);
+    json j = loadJson();
+    j["window"]["width"] = width;
+    j["window"]["height"] = height;
+    saveJson(j);
 }
 
 bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states)
 {
-    auto values = loadAll();
-
-    constexpr const char* kPrefix = "show_";
-    constexpr size_t kPrefixLen = 5;
+    json j = loadJson();
+    json editor = j.value("editor", json::object());
 
     bool foundAny = false;
-    for (const auto& [key, value] : values) {
-        if (key.compare(0, kPrefixLen, kPrefix) == 0) {
-            std::string name = key.substr(kPrefixLen);
-            if (!name.empty()) {
-                states[name] = parseBool(value);
-                foundAny = true;
-            }
+    for (auto it = editor.begin(); it != editor.end(); ++it) {
+        const std::string& key = it.key();
+        if (key.starts_with("show_") && it.value().is_boolean()) {
+            states[key.substr(5)] = it.value().get<bool>();
+            foundAny = true;
         }
     }
 
@@ -145,23 +94,24 @@ bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states)
 
 void saveEditorWindowStates(const std::unordered_map<std::string, bool>& states)
 {
-    auto values = loadAll();
+    json j = loadJson();
+    json editor = j.value("editor", json::object());
 
-    // Remove any stale show_ entries so panels that no longer exist are cleaned
-    // out and current visibility is rewritten below.
-    for (auto it = values.begin(); it != values.end();) {
-        if (it->first.compare(0, 5, "show_") == 0) {
-            it = values.erase(it);
+    // Remove stale show_ entries before rewriting current visibility.
+    for (auto it = editor.begin(); it != editor.end();) {
+        if (it.key().starts_with("show_")) {
+            it = editor.erase(it);
         } else {
             ++it;
         }
     }
 
     for (const auto& [name, visible] : states) {
-        values["show_" + name] = boolToString(visible);
+        editor["show_" + name] = visible;
     }
 
-    saveAll(values);
+    j["editor"] = editor;
+    saveJson(j);
 }
 
 void setSettingsPath(const std::string& path)
