@@ -184,29 +184,40 @@ bool loadLighting(LightSettings& light, SkySettings& sky)
         return false;
     }
 
-    json l = j["lighting"];
+    // Read each field independently so a settings file written by an older build
+    // (missing fields) loads cleanly: absent fields keep the struct's default,
+    // which the caller passed in. The out-params already hold defaults on entry.
+    auto readFloat = [](const json& obj, const char* key, float fallback) -> float {
+        if (obj.contains(key) && obj[key].is_number()) {
+            return obj[key].get<float>();
+        }
+        return fallback;
+    };
+    auto readVec3 = [](const json& obj, const char* key, simd::float3 fallback) -> simd::float3 {
+        if (obj.contains(key) && obj[key].is_array() && obj[key].size() == 3) {
+            const json& a = obj[key];
+            if (a[0].is_number() && a[1].is_number() && a[2].is_number()) {
+                return {a[0].get<float>(), a[1].get<float>(), a[2].get<float>()};
+            }
+        }
+        return fallback;
+    };
+
     try {
+        json l = j["lighting"];
         if (l.contains("light")) {
             json lt = l["light"];
-            light.direction = {lt["direction"][0].get<float>(),
-                               lt["direction"][1].get<float>(),
-                               lt["direction"][2].get<float>()};
-            light.ambient = lt["ambient"].get<float>();
-            light.diffuse = lt["diffuse"].get<float>();
+            light.direction = readVec3(lt, "direction", light.direction);
+            light.ambient = readFloat(lt, "ambient", light.ambient);
+            light.diffuse = readFloat(lt, "diffuse", light.diffuse);
         }
         if (l.contains("sky")) {
             json sk = l["sky"];
-            sky.horizonColor = {sk["horizonColor"][0].get<float>(),
-                                sk["horizonColor"][1].get<float>(),
-                                sk["horizonColor"][2].get<float>()};
-            sky.zenithColor = {sk["zenithColor"][0].get<float>(),
-                               sk["zenithColor"][1].get<float>(),
-                               sk["zenithColor"][2].get<float>()};
-            sky.sunColor = {sk["sunColor"][0].get<float>(),
-                            sk["sunColor"][1].get<float>(),
-                            sk["sunColor"][2].get<float>()};
-            sky.sunSize = sk["sunSize"].get<float>();
-            sky.sunIntensity = sk["sunIntensity"].get<float>();
+            sky.horizonColor = readVec3(sk, "horizonColor", sky.horizonColor);
+            sky.zenithColor = readVec3(sk, "zenithColor", sky.zenithColor);
+            sky.sunColor = readVec3(sk, "sunColor", sky.sunColor);
+            sky.sunSize = readFloat(sk, "sunSize", sky.sunSize);
+            sky.sunIntensity = readFloat(sk, "sunIntensity", sky.sunIntensity);
         }
     } catch (...) {
         return false;

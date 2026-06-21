@@ -6,6 +6,7 @@
 #include "core/settings.h"
 #include "debug/debug_state.h"
 #include "renderer/metal_renderer.h"
+#include "renderer/sky_presets.h"
 #include "scene/mesh_renderer.h"
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
@@ -423,8 +424,26 @@ void Editor::drawLightingPanel()
                 skySettings_->sunColor = {sun[0], sun[1], sun[2]};
             }
 
-            ImGui::SliderFloat("Sun Size", &skySettings_->sunSize, 0.0f, 0.3f);
+            // sunSize is the sun's angular radius in radians (consumed directly
+            // by sky.metal's acos comparison). Log scale + 4 decimals give usable
+            // resolution at the small end of the 0.001..0.05 rad range.
+            ImGui::SliderFloat("Sun Radius (rad)", &skySettings_->sunSize, 0.001f, 0.05f,
+                               "%.4f", ImGuiSliderFlags_Logarithmic);
             ImGui::SliderFloat("Sun Intensity", &skySettings_->sunIntensity, 0.0f, 5.0f);
+
+            if (lightSettings_) {
+                ImGui::SeparatorText("Presets");
+                const auto& presets = skyPresets();
+                for (size_t i = 0; i < presets.size(); ++i) {
+                    if (i > 0) {
+                        ImGui::SameLine();
+                    }
+                    if (ImGui::Button(presets[i].name)) {
+                        *lightSettings_ = presets[i].light;
+                        *skySettings_ = presets[i].sky;
+                    }
+                }
+            }
         }
     }
 

@@ -68,7 +68,7 @@ struct alignas(16) SkySettings
     simd::float3 horizonColor = {0.55f, 0.65f, 0.78f};
     simd::float3 zenithColor  = {0.12f, 0.22f, 0.45f};
     simd::float3 sunColor     = {1.0f, 0.95f, 0.85f};
-    float sunSize      = 0.04f;
+    float sunSize      = 0.01f;  // sun angular radius in radians (~0.57 deg)
     float sunIntensity = 1.0f;
 };
 

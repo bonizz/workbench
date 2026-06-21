@@ -2,6 +2,7 @@
 #include "renderer/mesh_geometry.h"
 #include "renderer/render_command.h"
 #include "renderer/render_context.h"
+#include "renderer/sky_presets.h"
 #include "scene/camera.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
@@ -351,7 +352,7 @@ void runTestRenderer()
         assert(std::fabs(sky.sunColor.x - 1.0f) < 1e-4f);
         assert(std::fabs(sky.sunColor.y - 0.95f) < 1e-4f);
         assert(std::fabs(sky.sunColor.z - 0.85f) < 1e-4f);
-        assert(std::fabs(sky.sunSize - 0.04f) < 1e-4f);
+        assert(std::fabs(sky.sunSize - 0.01f) < 1e-4f);
         assert(std::fabs(sky.sunIntensity - 1.0f) < 1e-4f);
         assert(sizeof(SkySettings) == 64);
     }
@@ -368,5 +369,35 @@ void runTestRenderer()
         assert(std::fabs(ctx.sky().horizonColor.y) < 1e-4f);
         assert(std::fabs(ctx.sky().horizonColor.z) < 1e-4f);
         assert(std::fabs(ctx.sky().sunIntensity - 2.5f) < 1e-4f);
+    }
+
+    // ===== Milestone 0.13: Sky & Light Polish =====
+
+    // Sky presets are the three expected entries, in order, with light + sky
+    // values that distinguish the times of day.
+    {
+        const auto& presets = skyPresets();
+        assert(presets.size() == 3);
+        assert(std::string(presets[0].name) == "Noon");
+        assert(std::string(presets[1].name) == "Warm Sunset");
+        assert(std::string(presets[2].name) == "Dusk / Blue Hour");
+
+        const SkyPreset& noon = presets[0];
+        const SkyPreset& sunset = presets[1];
+        const SkyPreset& dusk = presets[2];
+
+        // Dusk is dimmer than noon; sunset's sun is the most intense.
+        assert(dusk.light.diffuse < noon.light.diffuse);
+        assert(sunset.sky.sunIntensity > noon.sky.sunIntensity);
+
+        // Sunset sun reads warm: red channel exceeds blue.
+        assert(sunset.sky.sunColor.x > sunset.sky.sunColor.z);
+        // Dusk sun reads cool: blue channel exceeds red.
+        assert(dusk.sky.sunColor.z > dusk.sky.sunColor.x);
+
+        // Every preset's sun radius stays within the editor's slider range.
+        for (const auto& p : presets) {
+            assert(p.sky.sunSize >= 0.001f && p.sky.sunSize <= 0.05f);
+        }
     }
 }

@@ -93,6 +93,21 @@ functions, or write a tiny standalone check.
 - Do not assume `columns[0].xyz` is world-space right.
 - Add non-identity camera tests for camera/ray/math changes.
 
+### Directional light convention
+
+`LightSettings.direction` is the direction the light **travels** (e.g. `{0,-1,0}`
+is a sun directly overhead shining straight down). Two derived vectors follow from
+it, and both are the **negation**:
+
+- **Surface-to-light vector** (for Lambert `dot(n, l)`): `l = normalize(-direction)`.
+- **Visual sun direction** (where the sun disk sits in the sky): `-direction`.
+
+Both `assets/shaders/basic.metal` (mesh lighting) and `assets/shaders/sky.metal`
+(sun disk) negate `direction`, so the lit face of an object always points at the
+visible sun. **Pitfall:** an earlier build lit meshes with `+direction`, so the
+*away* face was lit while the sun rendered on the opposite side. If lighting and
+the sun ever disagree again, check the sign first.
+
 ## 5. id vs name addressing
 
 Agent commands address objects two ways:

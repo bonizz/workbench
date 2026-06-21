@@ -244,6 +244,95 @@ void runTestCore()
         assert(loadedSpeed == moveSpeed);
     }
 
+    // Settings: lighting + sky round-trip.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_lighting_settings.json";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        LightSettings light;
+        light.direction = {-0.5f, -0.8f, -0.2f};
+        light.ambient = 0.42f;
+        light.diffuse = 1.3f;
+
+        SkySettings sky;
+        sky.horizonColor = {0.9f, 0.5f, 0.3f};
+        sky.zenithColor = {0.1f, 0.15f, 0.4f};
+        sky.sunColor = {1.0f, 0.7f, 0.4f};
+        sky.sunSize = 0.022f;
+        sky.sunIntensity = 1.6f;
+
+        Settings::saveLighting(light, sky);
+
+        LightSettings loadedLight;
+        SkySettings loadedSky;
+        assert(Settings::loadLighting(loadedLight, loadedSky));
+        assert(loadedLight.direction.x == light.direction.x);
+        assert(loadedLight.direction.y == light.direction.y);
+        assert(loadedLight.direction.z == light.direction.z);
+        assert(loadedLight.ambient == light.ambient);
+        assert(loadedLight.diffuse == light.diffuse);
+        assert(loadedSky.horizonColor.x == sky.horizonColor.x);
+        assert(loadedSky.zenithColor.z == sky.zenithColor.z);
+        assert(loadedSky.sunColor.y == sky.sunColor.y);
+        assert(loadedSky.sunSize == sky.sunSize);
+        assert(loadedSky.sunIntensity == sky.sunIntensity);
+    }
+
+    // Settings: missing lighting fields fall back to struct defaults.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_lighting_partial.json";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        // A settings file from an older build: a "lighting" block that only
+        // carries one sky field. Everything else must keep its default.
+        {
+            std::ofstream out(path);
+            out << "{\n  \"lighting\": {\n    \"sky\": { \"sunSize\": 0.033 }\n  }\n}\n";
+        }
+
+        LightSettings defaultLight;
+        SkySettings defaultSky;
+
+        LightSettings loadedLight;
+        SkySettings loadedSky;
+        assert(Settings::loadLighting(loadedLight, loadedSky));
+
+        // Present field applied.
+        assert(loadedSky.sunSize == 0.033f);
+        // Absent fields preserved at defaults.
+        assert(loadedSky.sunIntensity == defaultSky.sunIntensity);
+        assert(loadedSky.horizonColor.x == defaultSky.horizonColor.x);
+        assert(loadedLight.direction.y == defaultLight.direction.y);
+        assert(loadedLight.ambient == defaultLight.ambient);
+        assert(loadedLight.diffuse == defaultLight.diffuse);
+    }
+
     // Camera: reset restores the default position, rotation, and speed.
     {
         Scene scene;
