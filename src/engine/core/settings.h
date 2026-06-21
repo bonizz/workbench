@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/math.h"
+
 #include <string>
 #include <unordered_map>
 
@@ -23,6 +25,13 @@ bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states);
 
 // Save editor panel visibility state. Panel names are written as show_<name>.
 void saveEditorWindowStates(const std::unordered_map<std::string, bool>& states);
+
+// Load the last saved camera state. Returns false if no saved camera settings
+// exist, in which case out parameters are left unchanged.
+bool loadCamera(Vec3& position, Vec3& rotation, float& moveSpeed);
+
+// Save the current camera state.
+void saveCamera(const Vec3& position, const Vec3& rotation, float moveSpeed);
 
 // Override the settings file path. Used by tests to avoid touching the real
 // settings.txt in the project root.

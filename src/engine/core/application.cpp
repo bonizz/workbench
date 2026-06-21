@@ -33,6 +33,14 @@ Application::~Application()
 
 bool Application::init()
 {
+    // Simulation advances per frame only when no automation is requested.
+    // In automation mode (--run-script/--bundle/--run-tests) the simulation
+    // advances exclusively via `sim.step` for determinism. Decide this early
+    // so camera persistence only affects interactive sessions.
+    liveSimulation_ = cliOptions_.runScript.empty()
+                   && cliOptions_.bundleName.empty()
+                   && !cliOptions_.runTests;
+
     int windowWidth = 800;
     int windowHeight = 600;
     if (Settings::loadWindowSize(windowWidth, windowHeight)) {
@@ -66,6 +74,17 @@ bool Application::init()
     scene_->camera().setActive(false);
     scene_->camera().setAspect(renderer_->aspectRatio());
 
+    if (liveSimulation_) {
+        Vec3 cameraPos = scene_->camera().transform().position;
+        Vec3 cameraRot = scene_->camera().transform().rotation;
+        float cameraSpeed = scene_->camera().moveSpeed();
+        if (Settings::loadCamera(cameraPos, cameraRot, cameraSpeed)) {
+            scene_->camera().transform().position = cameraPos;
+            scene_->camera().transform().rotation = cameraRot;
+            scene_->camera().setMoveSpeed(cameraSpeed);
+        }
+    }
+
     GameObject* cube = scene_->createObject("Cube");
     cube->transform().position = {0.0f, 0.5f, 0.0f};
     cube->transform().scale = {0.5f, 0.5f, 0.5f};
@@ -75,12 +94,6 @@ bool Application::init()
 
     onResize(window_->width(), window_->height(), window_->backingScale());
 
-    // Simulation advances per frame only when no automation is requested.
-    // In automation mode (--run-script/--bundle/--run-tests) the simulation
-    // advances exclusively via `sim.step` for determinism.
-    liveSimulation_ = cliOptions_.runScript.empty()
-                   && cliOptions_.bundleName.empty()
-                   && !cliOptions_.runTests;
     return true;
 }
 
@@ -117,6 +130,10 @@ void Application::saveSettings()
     if (editor_) {
         editor_->saveSettings();
         editor_->saveLayout();
+    }
+    if (liveSimulation_ && scene_) {
+        const Camera& cam = scene_->camera();
+        Settings::saveCamera(cam.transform().position, cam.transform().rotation, cam.moveSpeed());
     }
 }
 

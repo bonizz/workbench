@@ -15,6 +15,11 @@ public:
 
     void setAspect(float aspect);
 
+    // Reset to the initial default position/orientation and speed.
+    void reset();
+
+    void setMoveSpeed(float speed);
+
     Mat4 viewMatrix() const;
 
 private:

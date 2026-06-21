@@ -34,7 +34,7 @@ public:
     void setSelected(GameObject* obj) { selected_ = obj; }
 
 private:
-    void drawMainMenuBar();
+    void drawMainMenuBar(Scene& scene);
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
     void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();

@@ -105,7 +105,7 @@ void Editor::render(void* commandBuffer, void* renderEncoder, void* renderPassDe
 
 void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
 {
-    drawMainMenuBar();
+    drawMainMenuBar(scene);
 
     if (showHierarchy_) {
         drawHierarchy(scene, fps, frameTimeMs);
@@ -133,7 +133,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     }
 }
 
-void Editor::drawMainMenuBar()
+void Editor::drawMainMenuBar(Scene& scene)
 {
     if (!ImGui::BeginMainMenuBar()) {
         return;
@@ -160,6 +160,13 @@ void Editor::drawMainMenuBar()
             ImGui::MenuItem(toggle.label, nullptr, toggle.visible);
         }
 
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Camera")) {
+        if (ImGui::MenuItem("Reset Camera")) {
+            scene.camera().reset();
+        }
         ImGui::EndMenu();
     }
 
@@ -533,6 +540,12 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     if (ImGui::Button("Copy Debug State")) {
         std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_);
         ImGui::SetClipboardText(text.c_str());
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Reset Camera")) {
+        scene.camera().reset();
     }
 
     ImGui::End();

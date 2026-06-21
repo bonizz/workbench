@@ -206,4 +206,59 @@ void runTestCore()
         assert(states.size() == 3);
         assert(states["Hierarchy"] == true);
     }
+
+    // Settings: camera state round-trip.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_camera_settings.json";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        Vec3 position = {1.0f, 2.0f, 3.0f};
+        Vec3 rotation = {0.1f, 0.2f, 0.3f};
+        float moveSpeed = 12.5f;
+        Settings::saveCamera(position, rotation, moveSpeed);
+
+        Vec3 loadedPosition = {};
+        Vec3 loadedRotation = {};
+        float loadedSpeed = 0.0f;
+        assert(Settings::loadCamera(loadedPosition, loadedRotation, loadedSpeed));
+        assert(loadedPosition.x == position.x);
+        assert(loadedPosition.y == position.y);
+        assert(loadedPosition.z == position.z);
+        assert(loadedRotation.x == rotation.x);
+        assert(loadedRotation.y == rotation.y);
+        assert(loadedRotation.z == rotation.z);
+        assert(loadedSpeed == moveSpeed);
+    }
+
+    // Camera: reset restores the default position, rotation, and speed.
+    {
+        Scene scene;
+        Camera* camera = scene.createCamera({0.0f, 0.0f, 0.0f});
+        camera->transform().position = {10.0f, 20.0f, 30.0f};
+        camera->transform().rotation = {0.5f, 0.6f, 0.7f};
+        camera->setMoveSpeed(42.0f);
+
+        camera->reset();
+
+        assert(camera->transform().position.x == 0.0f);
+        assert(camera->transform().position.y == 3.0f);
+        assert(camera->transform().position.z == 5.0f);
+        assert(camera->transform().rotation.x == 0.0f);
+        assert(camera->transform().rotation.y == 0.0f);
+        assert(camera->transform().rotation.z == 0.0f);
+        assert(camera->moveSpeed() == 5.0f);
+    }
 }

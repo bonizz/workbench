@@ -141,6 +141,42 @@ void saveEditorWindowStates(const std::unordered_map<std::string, bool>& states)
     saveJson(j);
 }
 
+bool loadCamera(Vec3& position, Vec3& rotation, float& moveSpeed)
+{
+    json j = loadJson();
+    if (!j.contains("camera")) {
+        return false;
+    }
+
+    json camera = j["camera"];
+    try {
+        position.x = camera["position"][0].get<float>();
+        position.y = camera["position"][1].get<float>();
+        position.z = camera["position"][2].get<float>();
+
+        rotation.x = camera["rotation"][0].get<float>();
+        rotation.y = camera["rotation"][1].get<float>();
+        rotation.z = camera["rotation"][2].get<float>();
+
+        moveSpeed = camera["moveSpeed"].get<float>();
+    } catch (...) {
+        return false;
+    }
+
+    return true;
+}
+
+void saveCamera(const Vec3& position, const Vec3& rotation, float moveSpeed)
+{
+    json j = loadJson();
+    json camera = json::object();
+    camera["position"] = {position.x, position.y, position.z};
+    camera["rotation"] = {rotation.x, rotation.y, rotation.z};
+    camera["moveSpeed"] = moveSpeed;
+    j["camera"] = camera;
+    saveJson(j);
+}
+
 void setSettingsPath(const std::string& path)
 {
     gSettingsPath = path;

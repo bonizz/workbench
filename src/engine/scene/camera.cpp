@@ -9,6 +9,9 @@ constexpr float kMaxPitch = 85.0f * 3.14159f / 180.0f;
 constexpr float kMinMoveSpeed = 1.0f;
 constexpr float kMaxMoveSpeed = 50.0f;
 
+constexpr Vec3 kDefaultPosition = {0.0f, 3.0f, 5.0f};
+constexpr float kDefaultMoveSpeed = 5.0f;
+
 } // namespace
 
 Camera::Camera(ObjectId id, const std::string& name, const Vec3& position)
@@ -58,6 +61,22 @@ void Camera::update(float deltaTime, const InputState& input)
 void Camera::setAspect(float aspect)
 {
     projection_ = perspective(60.0f * 3.14159f / 180.0f, aspect, 0.1f, 100.0f);
+}
+
+void Camera::reset()
+{
+    transform().position = kDefaultPosition;
+    transform().rotation = {0.0f, 0.0f, 0.0f};
+    yaw_ = 0.0f;
+    pitch_ = 0.0f;
+    moveSpeed_ = kDefaultMoveSpeed;
+}
+
+void Camera::setMoveSpeed(float speed)
+{
+    if (speed < kMinMoveSpeed) speed = kMinMoveSpeed;
+    if (speed > kMaxMoveSpeed) speed = kMaxMoveSpeed;
+    moveSpeed_ = speed;
 }
 
 Vec3 Camera::forward() const
