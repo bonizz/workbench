@@ -16,14 +16,14 @@ Ray makeCameraRay(const Vec3& cameraPosition,
                   float ndcX,
                   float ndcY)
 {
-    // viewMatrix columns form an orthonormal basis:
-    //   col0 = world-space right
-    //   col1 = world-space up
-    //   col2 = world-space backward (eye - center)
-    // The camera looks down -col2.
-    Vec3 right = {viewMatrix.columns[0].x, viewMatrix.columns[0].y, viewMatrix.columns[0].z};
-    Vec3 up = {viewMatrix.columns[1].x, viewMatrix.columns[1].y, viewMatrix.columns[1].z};
-    Vec3 backward = {viewMatrix.columns[2].x, viewMatrix.columns[2].y, viewMatrix.columns[2].z};
+    // lookAt stores the orthonormal basis as the rows of the upper 3x3:
+    //   row0 = world-space right (s)
+    //   row1 = world-space up    (u)
+    //   row2 = world-space backward (eye - center, f)
+    // The camera looks down -row2.
+    Vec3 right = {viewMatrix.columns[0].x, viewMatrix.columns[1].x, viewMatrix.columns[2].x};
+    Vec3 up = {viewMatrix.columns[0].y, viewMatrix.columns[1].y, viewMatrix.columns[2].y};
+    Vec3 backward = {viewMatrix.columns[0].z, viewMatrix.columns[1].z, viewMatrix.columns[2].z};
 
     float tanHalfFov = std::tan(fovY * 0.5f);
     float halfH = tanHalfFov;        // near-plane distance cancels in normalization

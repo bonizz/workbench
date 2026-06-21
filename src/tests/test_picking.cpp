@@ -1,3 +1,4 @@
+#include "core/input_state.h"
 #include "core/math.h"
 #include "core/picking.h"
 #include "scene/camera.h"
@@ -49,6 +50,34 @@ void runTestPicking()
         assert(topRight.direction.x > 0.0f);
         assert(topRight.direction.y > 0.0f);
         assert(topRight.direction.z < 0.0f);
+    }
+
+    // makeCameraRay: non-zero yaw extracts the correct world-space basis rows.
+    {
+        Scene scene;
+        Camera* camera = scene.createCamera({0.0f, 0.0f, 0.0f});
+        camera->transform().rotation = {0.0f, 90.0f * kDegToRad, 0.0f};
+        camera->setAspect(1.0f);
+        camera->update(0.0f, InputState{});
+
+        Ray center = makeCameraRay(camera->transform().position,
+                                   camera->viewMatrix(),
+                                   1.0f,
+                                   60.0f * kDegToRad,
+                                   0.0f,
+                                   0.0f);
+        assert(std::fabs(center.direction.x - 1.0f) < 1e-4f);
+        assert(std::fabs(center.direction.y) < 1e-4f);
+        assert(std::fabs(center.direction.z) < 1e-4f);
+
+        Ray rightEdge = makeCameraRay(camera->transform().position,
+                                      camera->viewMatrix(),
+                                      1.0f,
+                                      60.0f * kDegToRad,
+                                      1.0f,
+                                      0.0f);
+        assert(rightEdge.direction.z > 0.0f);
+        assert(rightEdge.direction.x > 0.0f);
     }
 
     // intersectRaySphere: hit along -Z.
@@ -138,6 +167,28 @@ void runTestPicking()
         Vec3 dir = {0.0f, 0.0f, -1.0f};
         GameObject* hit = scene.pickObject(origin, dir);
         assert(hit == nearCube);
+    }
+
+    // Scene::pickObject + makeCameraRay: yawed camera still hits the object in front.
+    {
+        Scene scene;
+        Camera* camera = scene.createCamera({0.0f, 0.0f, 0.0f});
+        camera->transform().rotation = {0.0f, 90.0f * kDegToRad, 0.0f};
+        camera->setAspect(1.0f);
+        camera->update(0.0f, InputState{});
+
+        GameObject* cube = scene.createObject("Cube");
+        cube->transform().position = {2.0f, 0.0f, 0.0f};
+        cube->transform().scale = {0.5f, 0.5f, 0.5f};
+        cube->addComponent(std::make_unique<MeshRenderer>());
+
+        Ray ray = makeCameraRay(camera->transform().position,
+                                camera->viewMatrix(),
+                                1.0f,
+                                60.0f * kDegToRad,
+                                0.0f,
+                                0.0f);
+        assert(scene.pickObject(ray.origin, ray.direction) == cube);
     }
 
     // Scene::pickObject: camera is not pickable.

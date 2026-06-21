@@ -9,10 +9,10 @@ struct Ray
 };
 
 // Builds a world-space ray from a viewport click. The ray origin is the camera
-// position; the direction is derived from the camera's view matrix (which
-// provides the orthonormal right/up/backward basis) and the NDC position of
-// the click. This avoids duplicating camera orientation math or inverting the
-// projection matrix.
+// position; the direction is derived from the camera's view matrix (which stores
+// the orthonormal right/up/backward basis as the rows of its upper 3x3) and the
+// NDC position of the click. This avoids duplicating camera orientation math or
+// inverting the projection matrix.
 Ray makeCameraRay(const Vec3& cameraPosition,
                   const Mat4& viewMatrix,
                   float aspect,

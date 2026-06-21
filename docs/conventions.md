@@ -80,6 +80,19 @@ everywhere:
 When in doubt about a rotation's effect, derive it from `math.cpp`'s matrix
 functions, or write a tiny standalone check.
 
+### Matrix / SIMD conventions
+
+- Workbench uses `simd::float4x4` / `simd::float3x3`.
+- simd matrices are column-indexed in code: `m.columns[i]`.
+- That does not mean every basis vector is stored in a column.
+- Our `lookAt()` view matrix stores camera basis vectors as the rows of the
+  upper-left 3×3:
+  - `right    = {m.columns[0].x, m.columns[1].x, m.columns[2].x}`
+  - `up       = {m.columns[0].y, m.columns[1].y, m.columns[2].y}`
+  - `backward = {m.columns[0].z, m.columns[1].z, m.columns[2].z}`
+- Do not assume `columns[0].xyz` is world-space right.
+- Add non-identity camera tests for camera/ray/math changes.
+
 ## 5. id vs name addressing
 
 Agent commands address objects two ways:
