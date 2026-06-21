@@ -1,0 +1,5 @@
+scene.create_cube Orb
+component.set_mesh Orb sphere
+scene.save mesh_roundtrip.scene
+scene.load mesh_roundtrip.scene
+assert.mesh Orb sphere

@@ -36,7 +36,8 @@ vertex VertexOut vertex_main(const device Vertex* vertices [[buffer(0)]],
     return out;
 }
 
-fragment float4 fragment_main(VertexOut in [[stage_in]])
+fragment float4 fragment_main(VertexOut in [[stage_in]],
+                              constant float4& uColor [[buffer(0)]])
 {
-    return in.color;
+    return uColor;
 }

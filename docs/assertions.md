@@ -14,6 +14,7 @@ Assertions let agents express expectations about scene state inside scripts. The
 | `assert.position <name> <x> <y> <z> [tolerance]` | The named object's position matches. |
 | `assert.scale <name> <x> <y> <z> [tolerance]` | The named object's scale matches. |
 | `assert.color <name> <r> <g> <b> <a> [tolerance]` | The named object's MeshRenderer color matches. |
+| `assert.mesh <name> <shape>` | The named object's MeshRenderer shape is `cube`, `sphere`, or `plane`. |
 
 ## Success and failure
 
@@ -54,7 +55,7 @@ assert.position Cube 0 0.5 0
 assert.position Cube 0 0.5 0 0.001
 ```
 
-`assert.color` requires a `MeshRenderer`. If the object exists but has no
+`assert.color` and `assert.mesh` require a `MeshRenderer`. If the object exists but has no
 `MeshRenderer`, it is an assertion failure (not a usage error):
 
 ```text

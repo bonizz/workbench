@@ -120,6 +120,8 @@ project "tests"
         "src/engine/renderer/render_context.cpp",
         "src/engine/renderer/render_context.h",
         "src/engine/renderer/render_command.h",
+        "src/engine/renderer/mesh_geometry.cpp",
+        "src/engine/renderer/mesh_geometry.h",
         "src/engine/renderer/metal_renderer.h",
         "src/engine/renderer/metal_renderer.mm",
         "src/engine/scene/camera.cpp",

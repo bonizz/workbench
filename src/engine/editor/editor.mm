@@ -260,6 +260,14 @@ void Editor::drawInspector()
 
     if (MeshRenderer* mesh = selected_->getComponent<MeshRenderer>()) {
         ImGui::Text("MeshRenderer");
+
+        // shapeNames order must match MeshShape enum order (Cube=0, Sphere=1, Plane=2).
+        const char* shapeNames[] = {"Cube", "Sphere", "Plane"};
+        int current = static_cast<int>(mesh->shape);
+        if (ImGui::Combo("Shape", &current, shapeNames, IM_ARRAYSIZE(shapeNames))) {
+            mesh->shape = static_cast<scene::MeshShape>(current);
+        }
+
         float color[4] = {mesh->color.x, mesh->color.y, mesh->color.z, mesh->color.w};
         if (ImGui::ColorEdit4("Color", color)) {
             mesh->color = {color[0], color[1], color[2], color[3]};

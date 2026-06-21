@@ -28,9 +28,11 @@ public:
 ```
 
 ```cpp
+enum class MeshShape { Cube, Sphere, Plane };
+
 class MeshRenderer : public Component {
 public:
-    std::string mesh = "cube";
+    MeshShape shape = MeshShape::Cube;
     simd::float4 color = {1, 1, 1, 1};
 };
 ```
@@ -88,9 +90,15 @@ Inactive objects (`active == false`) are skipped entirely — no `onStart`, no `
 
 ## MeshRenderer
 
-`MeshRenderer` is currently the only way to make an object visible. The renderer iterates objects and draws a cube for each object that has a `MeshRenderer` component.
+`MeshRenderer` is currently the only way to make an object visible. The renderer iterates objects and draws a colored primitive for each object that has a `MeshRenderer` component.
 
-The `mesh` field is a placeholder string. Only `"cube"` is supported today.
+Supported shapes:
+
+- `cube` — the existing `[-1,1]³` box
+- `sphere` — UV sphere with radius 1 (16 slices × 12 stacks)
+- `plane` — single quad in the XZ plane at `y=0`, corners `(±1, 0, ±1)`
+
+Color is per-instance and passed to the fragment shader as a uniform, so many objects can share the same static geometry buffers while rendering with independent colors.
 
 ## RotateComponent
 
@@ -165,8 +173,10 @@ When an object is duplicated, each component is cloned via `Component::clone()`.
 - `component.add_mesh_renderer <id>` — add a `MeshRenderer` to an object (id-based, legacy)
 - `component.add_rotator <name>` — add a `RotateComponent` (velocity 0,0,0) to a named object (name-based)
 - `component.set_rotator <name> <x> <y> <z>` — set a `RotateComponent`'s angular velocity in deg/s (name-based)
+- `component.set_mesh <name> <shape>` — set a `MeshRenderer` shape to `cube`, `sphere`, or `plane` (name-based)
 - `sim.step [dt]` — advance the simulation by `dt` seconds (default 1/60); calls `Scene::update`
 - `assert.rotation <name> <x> <y> <z> [tolerance]` — assert a named object's Euler rotation in degrees (default tolerance 0.01)
+- `assert.mesh <name> <shape>` — assert a named object's `MeshRenderer` shape is `cube`, `sphere`, or `plane`
 
 The newer rotator/simulation commands are **name-based** so that `.wbs` tests do not depend on runtime `ObjectIds`, which are reassigned on load and differ across runs. The original `component.add_mesh_renderer` remains id-based and unchanged. This small inconsistency is intentional for now and will be reconciled when a future milestone revisits the command surface.
 

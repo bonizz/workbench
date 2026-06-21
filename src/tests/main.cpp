@@ -7,6 +7,7 @@
 #include "core/object_id.h"
 #include "debug/bundle.h"
 #include "debug/debug_state.h"
+#include "renderer/mesh_geometry.h"
 #include "renderer/render_context.h"
 #include "scene/camera.h"
 #include "scene/component.h"
@@ -79,8 +80,8 @@ int main()
     {
         RenderContext ctx;
         ctx.setCamera(identity(), identity());
-        ctx.drawCube(identity(), {1.0f, 0.0f, 0.0f, 1.0f});
-        ctx.drawCube(identity(), {0.0f, 1.0f, 0.0f, 1.0f});
+        ctx.drawShape(ShapeType::Cube, identity(), {1.0f, 0.0f, 0.0f, 1.0f});
+        ctx.drawShape(ShapeType::Cube, identity(), {0.0f, 1.0f, 0.0f, 1.0f});
         ctx.drawGround({0.0f, 0.0f, 0.0f});
 
         assert(ctx.commands().size() == 3);
@@ -1140,6 +1141,302 @@ int main()
         assert(result.output.find("assert.position") != std::string::npos);
         assert(result.output.find("assert.scale") != std::string::npos);
         assert(result.output.find("assert.color") != std::string::npos);
+    }
+
+    // ===== Milestone 0.7: Primitive Mesh Library =====
+
+    // Mesh geometry generation: counts, bounds, and index validity.
+    {
+        MeshData cube = makeCube();
+        assert(cube.vertices.size() == 8);
+        assert(cube.indices.size() == 36);
+        for (const auto& v : cube.vertices) {
+            assert(v.position[0] >= -1.0f && v.position[0] <= 1.0f);
+            assert(v.position[1] >= -1.0f && v.position[1] <= 1.0f);
+            assert(v.position[2] >= -1.0f && v.position[2] <= 1.0f);
+        }
+        for (uint16_t idx : cube.indices) {
+            assert(idx < cube.vertices.size());
+        }
+
+        MeshData sphere = makeSphere();
+        constexpr int kSphereSlices = 16;
+        constexpr int kSphereStacks = 12;
+        assert(sphere.vertices.size() == static_cast<size_t>((kSphereStacks + 1) * (kSphereSlices + 1)));
+        assert(sphere.indices.size() == static_cast<size_t>(kSphereStacks * kSphereSlices * 6));
+        for (const auto& v : sphere.vertices) {
+            float x = v.position[0];
+            float y = v.position[1];
+            float z = v.position[2];
+            assert(x >= -1.0f && x <= 1.0f);
+            assert(y >= -1.0f && y <= 1.0f);
+            assert(z >= -1.0f && z <= 1.0f);
+            float len = std::sqrt(x * x + y * y + z * z);
+            assert(std::fabs(len - 1.0f) < 1e-4f);
+        }
+        for (uint16_t idx : sphere.indices) {
+            assert(idx < sphere.vertices.size());
+        }
+
+        MeshData plane = makePlane();
+        assert(plane.vertices.size() == 4);
+        assert(plane.indices.size() == 6);
+        for (const auto& v : plane.vertices) {
+            assert(v.position[0] >= -1.0f && v.position[0] <= 1.0f);
+            assert(v.position[2] >= -1.0f && v.position[2] <= 1.0f);
+            assert(v.position[1] == 0.0f);
+        }
+        for (uint16_t idx : plane.indices) {
+            assert(idx < plane.vertices.size());
+        }
+    }
+
+    // Mesh shape string mapping.
+    {
+        scene::MeshShape shape = scene::MeshShape::Cube;
+        assert(std::string(scene::meshShapeToString(scene::MeshShape::Cube)) == "cube");
+        assert(std::string(scene::meshShapeToString(scene::MeshShape::Sphere)) == "sphere");
+        assert(std::string(scene::meshShapeToString(scene::MeshShape::Plane)) == "plane");
+
+        assert(scene::meshShapeFromString("cube", shape));
+        assert(shape == scene::MeshShape::Cube);
+        assert(scene::meshShapeFromString("sphere", shape));
+        assert(shape == scene::MeshShape::Sphere);
+        assert(scene::meshShapeFromString("plane", shape));
+        assert(shape == scene::MeshShape::Plane);
+
+        shape = scene::MeshShape::Cube;
+        assert(!scene::meshShapeFromString("teapot", shape));
+        assert(shape == scene::MeshShape::Cube); // unchanged on failure
+    }
+
+    // MeshRenderer defaults and clone preserve shape.
+    {
+        MeshRenderer mr;
+        assert(mr.shape == scene::MeshShape::Cube);
+
+        mr.shape = scene::MeshShape::Sphere;
+        auto copy = mr.clone();
+        auto* copyMesh = dynamic_cast<MeshRenderer*>(copy.get());
+        assert(copyMesh != nullptr);
+        assert(copyMesh->shape == scene::MeshShape::Sphere);
+    }
+
+    // Serialization round-trip preserves shape.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Orb");
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->shape = scene::MeshShape::Sphere;
+        mesh->color = {0.1f, 0.2f, 0.3f, 0.4f};
+        obj->addComponent(std::move(mesh));
+
+        const char* path = "build/tests/sphere_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+        assert(std::filesystem::exists(path));
+
+        std::ifstream in(path);
+        std::string content((std::istreambuf_iterator<char>(in)),
+                             std::istreambuf_iterator<char>());
+        assert(content.find("\"mesh\": \"sphere\"") != std::string::npos);
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        assert(SceneSerializer::load(loaded, path, error));
+
+        GameObject* loadedObj = nullptr;
+        for (const auto& o : loaded.objects()) {
+            if (!loaded.isCamera(o.get())) loadedObj = o.get();
+        }
+        assert(loadedObj != nullptr);
+        MeshRenderer* loadedMesh = loadedObj->getComponent<MeshRenderer>();
+        assert(loadedMesh != nullptr);
+        assert(loadedMesh->shape == scene::MeshShape::Sphere);
+        assert(loadedMesh->color.x == 0.1f);
+        assert(loadedMesh->color.y == 0.2f);
+        assert(loadedMesh->color.z == 0.3f);
+        assert(loadedMesh->color.w == 0.4f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Serialization backward compatibility: missing "mesh" defaults to cube.
+    {
+        const char* path = "build/tests/no_mesh_field.scene";
+        std::ofstream out(path);
+        out << R"({"objects": [{"name": "Box", "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "components": [{"type": "MeshRenderer", "color": [1,1,1,1]}]}]})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        assert(SceneSerializer::load(scene, path, error));
+
+        GameObject* obj = nullptr;
+        for (const auto& o : scene.objects()) {
+            if (!scene.isCamera(o.get())) obj = o.get();
+        }
+        assert(obj != nullptr);
+        MeshRenderer* mesh = obj->getComponent<MeshRenderer>();
+        assert(mesh != nullptr);
+        assert(mesh->shape == scene::MeshShape::Cube);
+
+        std::filesystem::remove(path);
+    }
+
+    // Serialization: unknown mesh value fails to load.
+    {
+        const char* path = "build/tests/unknown_mesh.scene";
+        std::ofstream out(path);
+        out << R"({"objects": [{"name": "Box", "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "components": [{"type": "MeshRenderer", "mesh": "teapot", "color": [1,1,1,1]}]}]})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        assert(!SceneSerializer::load(scene, path, error));
+        assert(error.find("Unknown mesh shape: teapot") != std::string::npos);
+
+        std::filesystem::remove(path);
+    }
+
+    // component.set_mesh command.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Box");
+        obj->addComponent(std::make_unique<MeshRenderer>());
+
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("component.set_mesh Box sphere", ctx);
+        assert(result.success);
+        assert(obj->getComponent<MeshRenderer>()->shape == scene::MeshShape::Sphere);
+
+        // Missing object.
+        result = executeCommand("component.set_mesh Nope sphere", ctx);
+        assert(!result.success);
+
+        // Object without MeshRenderer.
+        GameObject* plain = scene.createObject("Plain");
+        (void)plain;
+        result = executeCommand("component.set_mesh Plain cube", ctx);
+        assert(!result.success);
+
+        // Unknown shape.
+        result = executeCommand("component.set_mesh Box teapot", ctx);
+        assert(!result.success);
+    }
+
+    // assert.mesh command.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Box");
+        obj->addComponent(std::make_unique<MeshRenderer>());
+
+        GameObject* selected = nullptr;
+        std::string lastFailure;
+        AgentCommandContext ctx{scene, selected, 0, 0.0f, 0.0f, 0, {}, nullptr, {}, {}, &lastFailure};
+
+        AgentCommandResult result = executeCommand("assert.mesh Box cube", ctx);
+        assert(result.success);
+        assert(result.output == "OK");
+
+        // Mismatch.
+        lastFailure.clear();
+        result = executeCommand("assert.mesh Box sphere", ctx);
+        assert(!result.success);
+        assert(result.output.find("Expected mesh: sphere") != std::string::npos);
+        assert(result.output.find("Actual mesh:   cube") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Missing object is an assertion failure.
+        lastFailure.clear();
+        result = executeCommand("assert.mesh Nope cube", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object not found: Nope") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Object without MeshRenderer is an assertion failure.
+        GameObject* plain = scene.createObject("Plain");
+        (void)plain;
+        lastFailure.clear();
+        result = executeCommand("assert.mesh Plain cube", ctx);
+        assert(!result.success);
+        assert(result.output.find("Object 'Plain' has no MeshRenderer component.") != std::string::npos);
+        assert(lastFailure == result.output);
+
+        // Unknown shape is a usage error, not an assertion failure.
+        result = executeCommand("assert.mesh Box teapot", ctx);
+        assert(!result.success);
+        assert(result.output.find("Unknown mesh shape: teapot") != std::string::npos);
+    }
+
+    // DebugState reports mesh shape for MeshRenderer.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("SphereObj");
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->shape = scene::MeshShape::Sphere;
+        obj->addComponent(std::move(mesh));
+
+        std::string text = DebugState::build(1, 60.0f, 16.66f, 2, scene, nullptr);
+        assert(text.find("components: MeshRenderer (mesh: sphere)") != std::string::npos);
+    }
+
+    // drawShape maps MeshShape to ShapeType.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+
+        GameObject* cubeObj = scene.createObject("Cube");
+        cubeObj->addComponent(std::make_unique<MeshRenderer>());
+
+        GameObject* sphereObj = scene.createObject("Sphere");
+        auto sphereMesh = std::make_unique<MeshRenderer>();
+        sphereMesh->shape = scene::MeshShape::Sphere;
+        sphereObj->addComponent(std::move(sphereMesh));
+
+        GameObject* planeObj = scene.createObject("Plane");
+        auto planeMesh = std::make_unique<MeshRenderer>();
+        planeMesh->shape = scene::MeshShape::Plane;
+        planeObj->addComponent(std::move(planeMesh));
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx);
+
+        const auto& cmds = ctx.commands();
+        assert(cmds.size() == 4); // ground + cube + sphere + plane
+        assert(cmds[0].type == ShapeType::Ground);
+        assert(cmds[1].type == ShapeType::Cube);
+        assert(cmds[2].type == ShapeType::Sphere);
+        assert(cmds[3].type == ShapeType::Plane);
+    }
+
+    // New mesh commands appear in command discovery and have help.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        AgentCommandResult result = executeCommand("agent.commands", ctx);
+        assert(result.success);
+        assert(result.output.find("component.set_mesh") != std::string::npos);
+        assert(result.output.find("assert.mesh") != std::string::npos);
+
+        result = executeCommand("agent.help component.set_mesh", ctx);
+        assert(result.success);
+        assert(result.output.find("component.set_mesh <name> <shape>") != std::string::npos);
+
+        result = executeCommand("agent.help assert.mesh", ctx);
+        assert(result.success);
+        assert(result.output.find("assert.mesh <name> <shape>") != std::string::npos);
     }
 
     // ===== Milestone 0.6: Transform Hierarchy =====

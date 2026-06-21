@@ -1,0 +1,10 @@
+scene.create_cube Boxy
+assert.mesh Boxy cube
+
+scene.create_cube Bally
+component.set_mesh Bally sphere
+assert.mesh Bally sphere
+
+scene.create_cube Flatty
+component.set_mesh Flatty plane
+assert.mesh Flatty plane

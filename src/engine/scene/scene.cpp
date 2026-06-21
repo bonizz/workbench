@@ -1,5 +1,6 @@
 #include "scene/scene.h"
 
+#include "renderer/render_command.h"
 #include "scene/mesh_renderer.h"
 
 #include <algorithm>
@@ -118,6 +119,20 @@ void Scene::update(float deltaTime)
     updateWorldTransforms();
 }
 
+namespace {
+
+ShapeType toRenderShape(scene::MeshShape shape)
+{
+    switch (shape) {
+        case scene::MeshShape::Cube:   return ShapeType::Cube;
+        case scene::MeshShape::Sphere: return ShapeType::Sphere;
+        case scene::MeshShape::Plane:  return ShapeType::Plane;
+    }
+    return ShapeType::Cube;
+}
+
+} // namespace
+
 void Scene::buildRenderCommands(RenderContext& ctx)
 {
     // Refresh first so editor direct-edits to local fields are reflected.
@@ -128,7 +143,7 @@ void Scene::buildRenderCommands(RenderContext& ctx)
     for (const auto& obj : objects_) {
         if (!obj->active()) continue;
         if (MeshRenderer* mesh = obj->getComponent<MeshRenderer>()) {
-            ctx.drawCube(obj->transform().worldMatrix(), mesh->color);
+            ctx.drawShape(toRenderShape(mesh->shape), obj->transform().worldMatrix(), mesh->color);
         }
     }
 }

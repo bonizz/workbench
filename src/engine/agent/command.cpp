@@ -706,6 +706,66 @@ AgentCommandResult cmdComponentSetRotator(const std::vector<std::string>& args,
     return makeSuccess(oss.str());
 }
 
+AgentCommandResult cmdComponentSetMesh(const std::vector<std::string>& args,
+                                       AgentCommandContext& ctx)
+{
+    if (args.size() < 3) {
+        return makeError("Usage: component.set_mesh <name> <shape>");
+    }
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeError("Object not found: " + name);
+    }
+    MeshRenderer* mesh = obj->getComponent<MeshRenderer>();
+    if (!mesh) {
+        return makeError(obj->name() + " has no MeshRenderer");
+    }
+
+    scene::MeshShape shape;
+    if (!scene::meshShapeFromString(args[2], shape)) {
+        return makeError("Unknown mesh shape: " + args[2]);
+    }
+
+    mesh->shape = shape;
+    std::ostringstream oss;
+    oss << "Set " << obj->name() << " mesh to " << scene::meshShapeToString(shape);
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdAssertMesh(const std::vector<std::string>& args,
+                                 AgentCommandContext& ctx)
+{
+    if (args.size() < 3) {
+        return makeError("Usage: assert.mesh <name> <shape>");
+    }
+
+    const std::string& name = args[1];
+    GameObject* obj = findObjectByName(ctx.scene, name);
+    if (!obj) {
+        return makeAssertionFailure(ctx, "Object not found: " + name);
+    }
+
+    MeshRenderer* mesh = obj->getComponent<MeshRenderer>();
+    if (!mesh) {
+        return makeAssertionFailure(ctx, "Object '" + name + "' has no MeshRenderer component.");
+    }
+
+    scene::MeshShape expected;
+    if (!scene::meshShapeFromString(args[2], expected)) {
+        return makeError("Unknown mesh shape: " + args[2]);
+    }
+
+    if (mesh->shape == expected) {
+        return makeSuccess("OK");
+    }
+
+    std::ostringstream oss;
+    oss << "Expected mesh: " << scene::meshShapeToString(expected) << "\n";
+    oss << "Actual mesh:   " << scene::meshShapeToString(mesh->shape);
+    return makeAssertionFailure(ctx, oss.str());
+}
+
 AgentCommandResult cmdSimStep(const std::vector<std::string>& args,
                               AgentCommandContext& ctx)
 {
@@ -1100,6 +1160,11 @@ const std::vector<CommandEntry>& commandTable()
           "Sets a RotateComponent's angular velocity in degrees per second.",
           "component.set_rotator Spinner 0 90 0"},
          cmdComponentSetRotator},
+        {{"component.set_mesh",
+          "component.set_mesh <name> <shape>",
+          "Sets a MeshRenderer's shape to cube, sphere, or plane.",
+          "component.set_mesh Bally sphere"},
+         cmdComponentSetMesh},
         {{"sim.step",
           "sim.step [dt]",
           "Advances the simulation by dt seconds (default 1/60). Calls Scene::update.",
@@ -1185,6 +1250,11 @@ const std::vector<CommandEntry>& commandTable()
           "Asserts a named GameObject's MeshRenderer color rgba (default tolerance 0.01).",
           "assert.color Cube 0.95 0.55 0.20 1.0"},
          cmdAssertColor},
+        {{"assert.mesh",
+          "assert.mesh <name> <shape>",
+          "Asserts a named GameObject's MeshRenderer shape is cube, sphere, or plane.",
+          "assert.mesh Bally sphere"},
+         cmdAssertMesh},
     };
     return table;
 }

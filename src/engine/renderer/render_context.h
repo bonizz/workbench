@@ -10,7 +10,7 @@ class RenderContext
 public:
     void setCamera(const Mat4& view, const Mat4& projection);
 
-    void drawCube(const Mat4& transform, const simd::float4& color);
+    void drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color);
     void drawGround(const Vec3& cameraPos, float gridScale = 1.0f, float gridMajorDiv = 10.0f);
 
     const Mat4& view() const { return view_; }

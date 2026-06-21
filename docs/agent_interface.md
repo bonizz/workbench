@@ -62,6 +62,7 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `component.add_mesh_renderer <id>` | Add a MeshRenderer component to a GameObject. |
 | `component.add_rotator <name>` | Add a RotateComponent (angular velocity 0,0,0) to a named GameObject. |
 | `component.set_rotator <name> <x> <y> <z>` | Set a RotateComponent's angular velocity in degrees per second. |
+| `component.set_mesh <name> <shape>` | Set a MeshRenderer's shape to `cube`, `sphere`, or `plane`. |
 | `transform.get <id>` | Show position, rotation, and scale of an object. |
 | `transform.set_position <id> <x> <y> <z>` | Set an object's position. |
 | `debug.dump` | Return the same snapshot produced by `DebugState`. |
@@ -77,6 +78,7 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `assert.position <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's position (default tolerance 0.01). |
 | `assert.scale <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's scale (default tolerance 0.01). |
 | `assert.color <name> <r> <g> <b> <a> [tolerance]` | Assert a named GameObject's MeshRenderer color rgba (default tolerance 0.01). |
+| `assert.mesh <name> <shape>` | Assert a named GameObject's MeshRenderer shape is `cube`, `sphere`, or `plane`. |
 | `assert.parent <childName> <parentName\|none>` | Assert a named child's parent (by name), or `none` if it is a root. |
 | `assert.world_position <name> <x> <y> <z> [tolerance]` | Assert a named GameObject's WORLD-space position (default tolerance 0.01). |
 

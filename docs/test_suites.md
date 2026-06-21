@@ -130,6 +130,26 @@ The cycle guard is exercised by the intentionally failing
 `assets/tests/examples/hierarchy_cycle_fail.wbs` (excluded from the suite, like
 the other `*_fail.wbs` examples).
 
+### Mesh shape tests
+
+`assets/tests/mesh_shapes.wbs` covers all three supported primitives:
+
+```text
+scene.create_cube Boxy
+assert.mesh Boxy cube
+scene.create_cube Bally
+component.set_mesh Bally sphere
+assert.mesh Bally sphere
+scene.create_cube Flatty
+component.set_mesh Flatty plane
+assert.mesh Flatty plane
+```
+
+`assets/tests/mesh_persistence.wbs` verifies that shape survives a save/load
+round-trip. The intentionally failing
+`assets/tests/examples/mesh_unknown_fail.wbs` exercises the invalid-shape error
+path.
+
 The newer rotator and simulation commands are **name-based** so tests do not depend on runtime `ObjectIds`, which are reassigned on load and differ across runs.
 
 ### Failure-path tests

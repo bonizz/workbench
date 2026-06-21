@@ -4,7 +4,9 @@
 
 enum class ShapeType
 {
-    Cube,   // Colored cube, dynamic vertex buffer
+    Cube,   // Colored cube
+    Sphere, // Colored sphere
+    Plane,  // Colored plane
     Ground, // Infinite grid ground plane
 };
 

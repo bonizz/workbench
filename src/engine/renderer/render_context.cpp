@@ -6,10 +6,10 @@ void RenderContext::setCamera(const Mat4& view, const Mat4& projection)
     projection_ = projection;
 }
 
-void RenderContext::drawCube(const Mat4& transform, const simd::float4& color)
+void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color)
 {
     RenderCommand cmd;
-    cmd.type = ShapeType::Cube;
+    cmd.type = shape;
     cmd.transform = transform;
     cmd.color = color;
     commands_.push_back(cmd);

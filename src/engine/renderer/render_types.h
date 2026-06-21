@@ -36,3 +36,8 @@ enum class FragmentBufferIndex : uint32_t
     GridMajorDiv = 1,
     CameraPos = 2,
 };
+
+enum class MeshFragmentBufferIndex : uint32_t
+{
+    Color = 0,
+};

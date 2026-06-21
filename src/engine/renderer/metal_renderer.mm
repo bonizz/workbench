@@ -1,4 +1,5 @@
 #include "renderer/metal_renderer.h"
+#include "renderer/mesh_geometry.h"
 #include "renderer/render_types.h"
 #include "capture/capture.h"
 
@@ -17,21 +18,37 @@ struct MetalRenderer::Impl
     CAMetalLayer* layer = nil;
     id<MTLDevice> device = nil;
     id<MTLCommandQueue> commandQueue = nil;
-    id<MTLRenderPipelineState> cubePipeline = nil;
+    id<MTLRenderPipelineState> meshPipeline = nil;
     id<MTLRenderPipelineState> gridPipeline = nil;
     id<MTLDepthStencilState> depthStencilState = nil;
     id<MTLTexture> sceneColorTexture = nil;
     id<MTLTexture> depthTexture = nil;
-    id<MTLBuffer> cubeIndexBuffer = nil;
     id<MTLBuffer> groundVertexBuffer = nil;
     id<MTLBuffer> groundIndexBuffer = nil;
-    id<MTLBuffer> dynamicVertexBuffer = nil;
-    NSUInteger dynamicVertexOffset = 0;
-    static constexpr NSUInteger DYNAMIC_VERTEX_CAPACITY = 512;
+    id<MTLBuffer> cubeVertexBuffer = nil;
+    id<MTLBuffer> cubeIndexBuffer = nil;
+    id<MTLBuffer> sphereVertexBuffer = nil;
+    id<MTLBuffer> sphereIndexBuffer = nil;
+    id<MTLBuffer> planeVertexBuffer = nil;
+    id<MTLBuffer> planeIndexBuffer = nil;
+    NSUInteger cubeIndexCount = 0;
+    NSUInteger sphereIndexCount = 0;
+    NSUInteger planeIndexCount = 0;
     float aspectRatio = 1.0f;
 
     std::string pendingScreenshotPath;
 };
+
+static void uploadMesh(id<MTLDevice> device, const MeshData& data,
+                       id<MTLBuffer>& vbuf, id<MTLBuffer>& ibuf, NSUInteger& indexCount)
+{
+    NSUInteger vlen = sizeof(Vertex) * data.vertices.size();
+    NSUInteger ilen = sizeof(uint16_t) * data.indices.size();
+
+    vbuf = [device newBufferWithBytes:data.vertices.data() length:vlen options:MTLResourceStorageModeShared];
+    ibuf = [device newBufferWithBytes:data.indices.data() length:ilen options:MTLResourceStorageModeShared];
+    indexCount = data.indices.size();
+}
 
 static id<MTLRenderPipelineState> loadPipeline(id<MTLDevice> device,
                                                const char* shaderPath,
@@ -108,7 +125,7 @@ MetalRenderer::MetalRenderer(void* nativeMetalLayer)
     impl_->layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     impl_->layer.framebufferOnly = NO;
 
-    impl_->cubePipeline = loadPipeline(impl_->device,
+    impl_->meshPipeline = loadPipeline(impl_->device,
                                        "assets/shaders/basic.metal",
                                        "vertex_main",
                                        "fragment_main",
@@ -133,15 +150,19 @@ MetalRenderer::MetalRenderer(void* nativeMetalLayer)
 
 MetalRenderer::~MetalRenderer()
 {
-    [impl_->dynamicVertexBuffer release];
+    [impl_->planeIndexBuffer release];
+    [impl_->planeVertexBuffer release];
+    [impl_->sphereIndexBuffer release];
+    [impl_->sphereVertexBuffer release];
+    [impl_->cubeIndexBuffer release];
+    [impl_->cubeVertexBuffer release];
     [impl_->groundIndexBuffer release];
     [impl_->groundVertexBuffer release];
-    [impl_->cubeIndexBuffer release];
     [impl_->sceneColorTexture release];
     [impl_->depthTexture release];
     [impl_->depthStencilState release];
     [impl_->gridPipeline release];
-    [impl_->cubePipeline release];
+    [impl_->meshPipeline release];
     [impl_->commandQueue release];
     [impl_->device release];
     [impl_->layer release];
@@ -192,11 +213,9 @@ void MetalRenderer::requestScreenshot(const std::string& path)
 
 void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], const UIRenderCallback& uiCallback)
 {
-    if (!impl_->device || !impl_->commandQueue || !impl_->cubePipeline) {
+    if (!impl_->device || !impl_->commandQueue || !impl_->meshPipeline) {
         return;
     }
-
-    constexpr int CubeIndexCount = 36;
 
     if (!impl_->sceneColorTexture) {
         CGSize size = impl_->layer.drawableSize;
@@ -209,18 +228,19 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
         impl_->sceneColorTexture = [impl_->device newTextureWithDescriptor:colorDesc];
     }
 
-    if (!impl_->cubeIndexBuffer) {
-        NSUInteger len = sizeof(uint16_t) * CubeIndexCount;
-        impl_->cubeIndexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
-        uint16_t indices[CubeIndexCount] = {
-            0, 1, 2,   0, 2, 3,
-            4, 6, 5,   4, 7, 6,
-            3, 2, 6,   3, 6, 7,
-            0, 4, 5,   0, 5, 1,
-            1, 5, 6,   1, 6, 2,
-            0, 3, 7,   0, 7, 4
-        };
-        memcpy([impl_->cubeIndexBuffer contents], indices, len);
+    if (!impl_->cubeVertexBuffer) {
+        uploadMesh(impl_->device, makeCube(),
+                   impl_->cubeVertexBuffer, impl_->cubeIndexBuffer, impl_->cubeIndexCount);
+    }
+
+    if (!impl_->sphereVertexBuffer) {
+        uploadMesh(impl_->device, makeSphere(),
+                   impl_->sphereVertexBuffer, impl_->sphereIndexBuffer, impl_->sphereIndexCount);
+    }
+
+    if (!impl_->planeVertexBuffer) {
+        uploadMesh(impl_->device, makePlane(),
+                   impl_->planeVertexBuffer, impl_->planeIndexBuffer, impl_->planeIndexCount);
     }
 
     if (!impl_->groundVertexBuffer) {
@@ -239,11 +259,6 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
         impl_->groundIndexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
         uint16_t indices[6] = {0, 1, 2, 0, 2, 3};
         memcpy([impl_->groundIndexBuffer contents], indices, len);
-    }
-
-    if (!impl_->dynamicVertexBuffer) {
-        NSUInteger len = sizeof(Vertex) * Impl::DYNAMIC_VERTEX_CAPACITY;
-        impl_->dynamicVertexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
     }
 
     id<CAMetalDrawable> drawable = [impl_->layer nextDrawable];
@@ -270,41 +285,46 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
 
     Mat4 view = rc.view();
     Mat4 projection = rc.projection();
-    impl_->dynamicVertexOffset = 0;
-
-    auto allocateDynamicVerts = [&](NSUInteger count) -> std::pair<Vertex*, NSUInteger> {
-        Vertex* base = static_cast<Vertex*>([impl_->dynamicVertexBuffer contents]);
-        NSUInteger offset = impl_->dynamicVertexOffset;
-        if (offset + count > Impl::DYNAMIC_VERTEX_CAPACITY) {
-            NSLog(@"Dynamic vertex buffer overflow");
-            return {nullptr, 0};
-        }
-        impl_->dynamicVertexOffset += count;
-        return {base + offset, offset * sizeof(Vertex)};
-    };
 
     for (const auto& cmd : rc.commands()) {
         switch (cmd.type) {
-            case ShapeType::Cube: {
-                auto [verts, byteOffset] = allocateDynamicVerts(8);
-                if (!verts) break;
-                static const float positions[8][3] = {
-                    {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
-                    {-1,-1, 1}, {1,-1, 1}, {1,1, 1}, {-1,1, 1}
-                };
-                for (int i = 0; i < 8; ++i) {
-                    verts[i] = {{positions[i][0], positions[i][1], positions[i][2]},
-                                {cmd.color.x, cmd.color.y, cmd.color.z, cmd.color.w}};
+            case ShapeType::Cube:
+            case ShapeType::Sphere:
+            case ShapeType::Plane: {
+                id<MTLBuffer> vbuf = nil;
+                id<MTLBuffer> ibuf = nil;
+                NSUInteger indexCount = 0;
+                switch (cmd.type) {
+                    case ShapeType::Cube:
+                        vbuf = impl_->cubeVertexBuffer;
+                        ibuf = impl_->cubeIndexBuffer;
+                        indexCount = impl_->cubeIndexCount;
+                        break;
+                    case ShapeType::Sphere:
+                        vbuf = impl_->sphereVertexBuffer;
+                        ibuf = impl_->sphereIndexBuffer;
+                        indexCount = impl_->sphereIndexCount;
+                        break;
+                    case ShapeType::Plane:
+                        vbuf = impl_->planeVertexBuffer;
+                        ibuf = impl_->planeIndexBuffer;
+                        indexCount = impl_->planeIndexCount;
+                        break;
+                    default:
+                        break;
                 }
-                [sceneEncoder setRenderPipelineState:impl_->cubePipeline];
-                [sceneEncoder setVertexBuffer:impl_->dynamicVertexBuffer offset:byteOffset
+                if (!vbuf || !ibuf) break;
+                [sceneEncoder setRenderPipelineState:impl_->meshPipeline];
+                [sceneEncoder setVertexBuffer:vbuf offset:0
                     atIndex:static_cast<NSUInteger>(VertexBufferIndex::Vertices)];
                 ShaderUniforms uniforms = {cmd.transform, view, projection};
                 [sceneEncoder setVertexBytes:&uniforms length:sizeof(uniforms)
                     atIndex:static_cast<NSUInteger>(VertexBufferIndex::Uniforms)];
+                [sceneEncoder setFragmentBytes:&cmd.color length:sizeof(cmd.color)
+                    atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Color)];
                 [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                    indexCount:CubeIndexCount indexType:MTLIndexTypeUInt16
-                    indexBuffer:impl_->cubeIndexBuffer indexBufferOffset:0];
+                    indexCount:indexCount indexType:MTLIndexTypeUInt16
+                    indexBuffer:ibuf indexBufferOffset:0];
                 break;
             }
             case ShapeType::Ground: {

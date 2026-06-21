@@ -127,7 +127,9 @@ std::string build(uint64_t frame,
                 if (!first) out << ", ";
                 first = false;
                 out << comp->typeName();
-                if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
+                if (auto* mr = dynamic_cast<const MeshRenderer*>(comp.get())) {
+                    out << " (mesh: " << scene::meshShapeToString(mr->shape) << ")";
+                } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
                     out << " (angularVelocity: " << formatVec3(rot->angularVelocityEuler) << ")";
                 }
             }

@@ -326,8 +326,13 @@ private:
         if (!expect(TokenType::ObjectEnd, error)) return false;
 
         if (type == "MeshRenderer") {
+            scene::MeshShape shape;
+            if (!scene::meshShapeFromString(mesh, shape)) {
+                error = "Unknown mesh shape: " + mesh;
+                return false;
+            }
             auto meshRenderer = std::make_unique<MeshRenderer>();
-            meshRenderer->mesh = mesh;
+            meshRenderer->shape = shape;
             meshRenderer->color = color;
             out.push_back(std::move(meshRenderer));
         } else if (type == "RotateComponent") {
@@ -453,7 +458,7 @@ static void writeObject(std::ostream& out, const GameObject& obj, const std::str
             if (!firstComp) out << ", ";
             firstComp = false;
             out << "{\"type\": \"MeshRenderer\", ";
-            out << "\"mesh\": \"" << mesh->mesh << "\", ";
+            out << "\"mesh\": \"" << scene::meshShapeToString(mesh->shape) << "\", ";
             out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
         } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
             if (!firstComp) out << ", ";
