@@ -55,6 +55,9 @@ public:
     LightSettings& lightSettings() { return lightSettings_; }
     const LightSettings& lightSettings() const { return lightSettings_; }
 
+    SkySettings& skySettings() { return skySettings_; }
+    const SkySettings& skySettings() const { return skySettings_; }
+
     // Input events from the platform window.
     void onKeyEvent(int keyCode, bool down);
     void onMouseDrag(float deltaX, float deltaY);
@@ -119,4 +122,5 @@ private:
     bool automationFailed_ = false;
 
     LightSettings lightSettings_;
+    SkySettings skySettings_;
 };

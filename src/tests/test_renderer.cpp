@@ -336,4 +336,37 @@ void runTestRenderer()
         assert(std::fabs(t.y - 0.0f) < 1e-4f);
         assert(std::fabs(t.z - 0.0f) < 1e-4f);
     }
+
+    // ===== Milestone 0.12: Simple Procedural Sky =====
+
+    // SkySettings carries sensible defaults and matches the expected GPU size.
+    {
+        SkySettings sky;
+        assert(std::fabs(sky.horizonColor.x - 0.55f) < 1e-4f);
+        assert(std::fabs(sky.horizonColor.y - 0.65f) < 1e-4f);
+        assert(std::fabs(sky.horizonColor.z - 0.78f) < 1e-4f);
+        assert(std::fabs(sky.zenithColor.x - 0.12f) < 1e-4f);
+        assert(std::fabs(sky.zenithColor.y - 0.22f) < 1e-4f);
+        assert(std::fabs(sky.zenithColor.z - 0.45f) < 1e-4f);
+        assert(std::fabs(sky.sunColor.x - 1.0f) < 1e-4f);
+        assert(std::fabs(sky.sunColor.y - 0.95f) < 1e-4f);
+        assert(std::fabs(sky.sunColor.z - 0.85f) < 1e-4f);
+        assert(std::fabs(sky.sunSize - 0.04f) < 1e-4f);
+        assert(std::fabs(sky.sunIntensity - 1.0f) < 1e-4f);
+        assert(sizeof(SkySettings) == 64);
+    }
+
+    // RenderContext stores and returns sky settings.
+    {
+        RenderContext ctx;
+        SkySettings sky;
+        sky.horizonColor = {1.0f, 0.0f, 0.0f};
+        sky.sunIntensity = 2.5f;
+        ctx.setSky(sky);
+
+        assert(std::fabs(ctx.sky().horizonColor.x - 1.0f) < 1e-4f);
+        assert(std::fabs(ctx.sky().horizonColor.y) < 1e-4f);
+        assert(std::fabs(ctx.sky().horizonColor.z) < 1e-4f);
+        assert(std::fabs(ctx.sky().sunIntensity - 2.5f) < 1e-4f);
+    }
 }

@@ -20,7 +20,9 @@ struct MetalRenderer::Impl
     id<MTLCommandQueue> commandQueue = nil;
     id<MTLRenderPipelineState> meshPipeline = nil;
     id<MTLRenderPipelineState> gridPipeline = nil;
+    id<MTLRenderPipelineState> skyPipeline = nil;
     id<MTLDepthStencilState> depthStencilState = nil;
+    id<MTLDepthStencilState> skyDepthState = nil;
     id<MTLTexture> sceneColorTexture = nil;
     id<MTLTexture> depthTexture = nil;
     id<MTLBuffer> groundVertexBuffer = nil;
@@ -144,10 +146,22 @@ MetalRenderer::MetalRenderer(void* nativeMetalLayer)
                                        MTLPixelFormatDepth32Float,
                                        true);
 
+    impl_->skyPipeline = loadPipeline(impl_->device,
+                                      "assets/shaders/sky.metal",
+                                      "sky_vertex",
+                                      "sky_fragment",
+                                      MTLPixelFormatBGRA8Unorm,
+                                      MTLPixelFormatDepth32Float,
+                                      false);
+
     MTLDepthStencilDescriptor* depthDesc = [[MTLDepthStencilDescriptor alloc] init];
     depthDesc.depthCompareFunction = MTLCompareFunctionGreater;
     depthDesc.depthWriteEnabled = YES;
     impl_->depthStencilState = [impl_->device newDepthStencilStateWithDescriptor:depthDesc];
+
+    depthDesc.depthCompareFunction = MTLCompareFunctionAlways;
+    depthDesc.depthWriteEnabled = NO;
+    impl_->skyDepthState = [impl_->device newDepthStencilStateWithDescriptor:depthDesc];
     [depthDesc release];
 }
 
@@ -164,8 +178,10 @@ MetalRenderer::~MetalRenderer()
     [impl_->sceneColorTexture release];
     [impl_->depthTexture release];
     [impl_->depthStencilState release];
+    [impl_->skyDepthState release];
     [impl_->gridPipeline release];
     [impl_->meshPipeline release];
+    [impl_->skyPipeline release];
     [impl_->commandQueue release];
     [impl_->device release];
     [impl_->layer release];
@@ -288,6 +304,32 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
 
     Mat4 view = rc.view();
     Mat4 projection = rc.projection();
+
+    // Draw the procedural sky first so it fills the background without
+    // interfering with depth-tested geometry.
+    if (impl_->skyPipeline && impl_->skyDepthState) {
+        [sceneEncoder setRenderPipelineState:impl_->skyPipeline];
+        [sceneEncoder setDepthStencilState:impl_->skyDepthState];
+
+        Mat4 invViewProj = inverseMatrix(multiply(projection, view));
+        Mat4 invView = inverseMatrix(view);
+        simd::float4 cameraCol = invView.columns[3];
+        simd::float3 cameraPos = {cameraCol.x, cameraCol.y, cameraCol.z};
+        simd::float3 sunDir = simd::normalize(-rc.light().direction);
+
+        [sceneEncoder setFragmentBytes:&rc.sky() length:sizeof(SkySettings)
+            atIndex:static_cast<NSUInteger>(SkyFragmentBufferIndex::SkySettings)];
+        [sceneEncoder setFragmentBytes:&invViewProj length:sizeof(simd::float4x4)
+            atIndex:static_cast<NSUInteger>(SkyFragmentBufferIndex::InvViewProj)];
+        [sceneEncoder setFragmentBytes:&cameraPos length:sizeof(simd::float3)
+            atIndex:static_cast<NSUInteger>(SkyFragmentBufferIndex::CameraPos)];
+        [sceneEncoder setFragmentBytes:&sunDir length:sizeof(simd::float3)
+            atIndex:static_cast<NSUInteger>(SkyFragmentBufferIndex::SunDir)];
+        [sceneEncoder drawPrimitives:MTLPrimitiveTypeTriangle
+            vertexStart:0 vertexCount:3];
+
+        [sceneEncoder setDepthStencilState:impl_->depthStencilState];
+    }
 
     for (const auto& cmd : rc.commands()) {
         switch (cmd.type) {

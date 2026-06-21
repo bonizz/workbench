@@ -29,6 +29,7 @@ public:
 
     void setRenderer(MetalRenderer* renderer) { renderer_ = renderer; }
     void setLightSettings(LightSettings* settings) { lightSettings_ = settings; }
+    void setSkySettings(SkySettings* settings) { skySettings_ = settings; }
 
     const GameObject* selected() const { return selected_; }
     void setSelected(GameObject* obj) { selected_ = obj; }
@@ -69,6 +70,7 @@ private:
     GameObject* selected_ = nullptr;
     MetalRenderer* renderer_ = nullptr;
     LightSettings* lightSettings_ = nullptr;
+    SkySettings* skySettings_ = nullptr;
     char nameBuffer_[128] = {};
     char commandBuffer_[256] = {};
     std::string consoleOutput_;

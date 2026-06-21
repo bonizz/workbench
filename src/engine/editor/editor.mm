@@ -388,7 +388,7 @@ void Editor::drawLightingPanel()
     }
 
     ImGui::SetNextWindowPos(ImVec2(280, 320), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360, 180), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 320), ImGuiCond_FirstUseEver);
     ImGui::Begin("Lighting", &showLighting_);
 
     float dir[3] = {lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z};
@@ -403,6 +403,28 @@ void Editor::drawLightingPanel()
 
     ImGui::SliderFloat("Ambient", &lightSettings_->ambient, 0.0f, 1.0f);
     ImGui::SliderFloat("Diffuse", &lightSettings_->diffuse, 0.0f, 2.0f);
+
+    if (skySettings_) {
+        if (ImGui::CollapsingHeader("Sky")) {
+            float horizon[3] = {skySettings_->horizonColor.x, skySettings_->horizonColor.y, skySettings_->horizonColor.z};
+            if (ImGui::ColorEdit3("Horizon", horizon)) {
+                skySettings_->horizonColor = {horizon[0], horizon[1], horizon[2]};
+            }
+
+            float zenith[3] = {skySettings_->zenithColor.x, skySettings_->zenithColor.y, skySettings_->zenithColor.z};
+            if (ImGui::ColorEdit3("Zenith", zenith)) {
+                skySettings_->zenithColor = {zenith[0], zenith[1], zenith[2]};
+            }
+
+            float sun[3] = {skySettings_->sunColor.x, skySettings_->sunColor.y, skySettings_->sunColor.z};
+            if (ImGui::ColorEdit3("Sun", sun)) {
+                skySettings_->sunColor = {sun[0], sun[1], sun[2]};
+            }
+
+            ImGui::SliderFloat("Sun Size", &skySettings_->sunSize, 0.0f, 0.3f);
+            ImGui::SliderFloat("Sun Intensity", &skySettings_->sunIntensity, 0.0f, 5.0f);
+        }
+    }
 
     ImGui::End();
 }

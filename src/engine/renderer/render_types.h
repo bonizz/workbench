@@ -44,6 +44,14 @@ enum class MeshFragmentBufferIndex : uint32_t
     Light = 1,
 };
 
+enum class SkyFragmentBufferIndex : uint32_t
+{
+    SkySettings = 0,
+    InvViewProj = 1,
+    CameraPos   = 2,
+    SunDir      = 3,
+};
+
 // Global directional light settings. Must match the Metal shader LightSettings struct.
 struct alignas(16) LightSettings
 {
@@ -53,3 +61,15 @@ struct alignas(16) LightSettings
 };
 
 static_assert(sizeof(LightSettings) == 32, "LightSettings size mismatch");
+
+// Procedural sky settings. Must match the Metal shader SkySettings struct.
+struct alignas(16) SkySettings
+{
+    simd::float3 horizonColor = {0.55f, 0.65f, 0.78f};
+    simd::float3 zenithColor  = {0.12f, 0.22f, 0.45f};
+    simd::float3 sunColor     = {1.0f, 0.95f, 0.85f};
+    float sunSize      = 0.04f;
+    float sunIntensity = 1.0f;
+};
+
+static_assert(sizeof(SkySettings) == 64, "SkySettings size mismatch");

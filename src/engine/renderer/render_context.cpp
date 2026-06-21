@@ -14,6 +14,11 @@ void RenderContext::setLight(const Vec3& direction, float ambient, float diffuse
     light_.diffuse = diffuse;
 }
 
+void RenderContext::setSky(const SkySettings& sky)
+{
+    sky_ = sky;
+}
+
 void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color, bool highlight)
 {
     RenderCommand cmd;

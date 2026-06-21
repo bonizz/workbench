@@ -64,6 +64,7 @@ bool Application::init()
     }
     editor_->setRenderer(renderer_.get());
     editor_->setLightSettings(&lightSettings_);
+    editor_->setSkySettings(&skySettings_);
 
     lightSettings_.direction = {-0.5f, -1.0f, -0.75f};
     lightSettings_.ambient = 0.15f;
@@ -329,6 +330,7 @@ void Application::onRender()
     ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
     Vec3 dir = {lightSettings_.direction.x, lightSettings_.direction.y, lightSettings_.direction.z};
     ctx.setLight(dir, lightSettings_.ambient, lightSettings_.diffuse);
+    ctx.setSky(skySettings_);
     scene_->buildRenderCommands(ctx, editor_->selected());
     lastRenderCommandCount_ = ctx.commands().size();
 
