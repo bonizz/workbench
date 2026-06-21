@@ -37,6 +37,7 @@ public:
 
     void setCliOptions(const CliOptions& options);
     int exitCode() const;
+    void saveWindowSize();
 
     // Called by the platform window each frame.
     void onUpdate(float deltaTime);

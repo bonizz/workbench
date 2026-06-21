@@ -166,6 +166,7 @@
 
 @interface WorkbenchAppDelegate : NSObject <NSApplicationDelegate>
 @property(retain, nonatomic) NSWindow* window;
+@property(assign, nonatomic) Window* workbenchWindow;
 @end
 
 @implementation WorkbenchAppDelegate
@@ -179,6 +180,14 @@
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
     (void)sender;
     return YES;
+}
+
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
+    (void)sender;
+    if (Window* w = self.workbenchWindow) {
+        w->application().saveWindowSize();
+    }
+    return NSTerminateNow;
 }
 
 - (void)dealloc {
@@ -255,6 +264,7 @@ void Window::run()
     NSApplication* app = [NSApplication sharedApplication];
     WorkbenchAppDelegate* delegate = [[WorkbenchAppDelegate alloc] init];
     delegate.window = impl_->window;
+    delegate.workbenchWindow = this;
 
     NSMenu* menuBar = [[NSMenu alloc] init];
     NSMenuItem* appMenuItem = [[NSMenuItem alloc] init];

@@ -92,6 +92,13 @@ int Application::exitCode() const
     return automationFailed_ ? 1 : 0;
 }
 
+void Application::saveWindowSize()
+{
+    if (window_) {
+        Settings::saveWindowSize(static_cast<int>(window_->width()), static_cast<int>(window_->height()));
+    }
+}
+
 void Application::shutdown()
 {
     if (window_) {
@@ -125,6 +132,7 @@ void Application::onResize(float width, float height, float scale)
     if (scene_) {
         scene_->camera().setAspect(renderer_ ? renderer_->aspectRatio() : (width / height));
     }
+    Settings::saveWindowSize(static_cast<int>(width), static_cast<int>(height));
 }
 
 void Application::waitForPendingScreenshot()
