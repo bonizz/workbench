@@ -49,7 +49,10 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
                               constant LightSettings& light [[buffer(1)]])
 {
     float3 n = normalize(in.worldNormal);
-    float3 l = normalize(light.direction);
+    // light.direction is the direction light travels; the surface-to-light
+    // vector is its negation. This matches the sky's sun direction
+    // (sunDir = -light.direction), so the lit face faces the visible sun.
+    float3 l = normalize(-light.direction);
     float lambert = max(dot(n, l), 0.0f);
     float lit = light.ambient + light.diffuse * lambert;
     return float4(uColor.rgb * lit, uColor.a);
