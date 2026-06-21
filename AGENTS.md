@@ -103,3 +103,10 @@ When implementing a milestone:
 * For prior milestone plans, read the goal/constraints/contracts first, not the whole file.
 * Ask for clarification if a file or subsystem is unclear instead of scanning broadly.
 * Avoid screenshot analysis unless explicitly requested.
+* Build and test with `./build.sh` and `./test.sh`. When their output is piped
+  (the usual agent case) they are quiet: a single `build OK` / `tests OK` line on
+  success, or the failing log tail on error. Do not wrap them in your own
+  output-capturing redirect, and do not re-run in a verbose mode to read errors —
+  the failure tail already contains them. Pass `VERBOSE=1` only if you genuinely
+  need full progress output. Note: the `tests` target does not compile
+  `application.cpp` / `window.mm`; run `./build.sh` to verify those.
