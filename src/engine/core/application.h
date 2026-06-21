@@ -58,7 +58,10 @@ public:
     bool liveSimulation() const { return liveSimulation_; }
 
     // Input events from the platform window.
-    void onKeyEvent(int keyCode, bool down);
+    // `shortcutModifier` is true when the platform shortcut key (Cmd on macOS,
+    // Ctrl elsewhere) is held, so shortcuts like Save/New can be handled before
+    // regular key bindings.
+    void onKeyEvent(int keyCode, bool down, bool shortcutModifier);
     void onMouseDrag(float deltaX, float deltaY);
     void onScroll(float delta);
     void onMouseButton(int button, bool down, float x, float y);

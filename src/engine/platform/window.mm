@@ -47,8 +47,9 @@
             NSString* chars = [event charactersIgnoringModifiers];
             if ([chars length] > 0 && !imguiWantsKb) {
                 unichar c = [chars characterAtIndex:0];
+                bool shortcut = (event.modifierFlags & NSEventModifierFlagCommand) != 0;
                 if (Window* w = weakSelf.workbenchWindow) {
-                    w->application().onKeyEvent(static_cast<int>(c), isDown);
+                    w->application().onKeyEvent(static_cast<int>(c), isDown, shortcut);
                 }
             }
             return event;

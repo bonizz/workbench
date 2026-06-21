@@ -219,13 +219,16 @@ void Application::saveScene()
     }
 
     std::string error;
-    if (SceneSerializer::save(*scene_, scene_->loadedScenePath(), error)) {
-        sceneDirty_ = false;
-        if (liveSimulation_) {
-            Settings::saveLastScene(scene_->loadedScenePath());
-        }
-        updateWindowTitle();
+    if (!SceneSerializer::save(*scene_, scene_->loadedScenePath(), error)) {
+        std::fprintf(stderr, "Failed to save scene: %s\n", error.c_str());
+        return;
     }
+
+    sceneDirty_ = false;
+    if (liveSimulation_) {
+        Settings::saveLastScene(scene_->loadedScenePath());
+    }
+    updateWindowTitle();
 }
 
 void Application::markSceneDirty()
@@ -445,10 +448,18 @@ void Application::onRender()
     });
 }
 
-void Application::onKeyEvent(int keyCode, bool down)
+void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier)
 {
     if (ImGui::GetIO().WantCaptureKeyboard) {
         return;
+    }
+
+    if (shortcutModifier && down) {
+        switch (keyCode) {
+            case 's': case 'S': saveScene(); return;
+            case 'n': case 'N': newScene(); return;
+            default: break;
+        }
     }
 
     switch (keyCode) {
