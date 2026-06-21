@@ -2,6 +2,7 @@
 #include "agent/command.h"
 #include "agent/script_runner.h"
 #include "capture/capture.h"
+#include "core/math.h"
 #include "debug/debug_state.h"
 #include "renderer/metal_renderer.h"
 #include "scene/mesh_renderer.h"
@@ -85,6 +86,7 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
 {
     drawHierarchy(scene, fps, frameTimeMs);
     drawInspector();
+    drawLightingPanel();
     drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
     drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
     drawScriptRunner(scene);
@@ -296,6 +298,32 @@ void Editor::drawInspector()
         selected_->addComponent(std::make_unique<scene::RotateComponent>());
     }
     ImGui::EndDisabled();
+
+    ImGui::End();
+}
+
+void Editor::drawLightingPanel()
+{
+    if (!lightSettings_) {
+        return;
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(280, 320), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, 180), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Lighting");
+
+    float dir[3] = {lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z};
+    if (ImGui::DragFloat3("Direction", dir, 0.01f)) {
+        Vec3 v = {dir[0], dir[1], dir[2]};
+        v = normalize(v);
+        lightSettings_->direction = {v.x, v.y, v.z};
+    }
+
+    Vec3 n = normalize({lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z});
+    ImGui::Text("Normalized: %.3f, %.3f, %.3f", n.x, n.y, n.z);
+
+    ImGui::SliderFloat("Ambient", &lightSettings_->ambient, 0.0f, 1.0f);
+    ImGui::SliderFloat("Diffuse", &lightSettings_->diffuse, 0.0f, 2.0f);
 
     ImGui::End();
 }

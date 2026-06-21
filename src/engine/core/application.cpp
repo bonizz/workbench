@@ -39,6 +39,11 @@ bool Application::init()
         return false;
     }
     editor_->setRenderer(renderer_.get());
+    editor_->setLightSettings(&lightSettings_);
+
+    lightSettings_.direction = {-0.5f, -1.0f, -0.75f};
+    lightSettings_.ambient = 0.15f;
+    lightSettings_.diffuse = 1.0f;
 
     scene_ = std::make_unique<Scene>();
     scene_->createCamera({0.0f, 3.0f, 5.0f});
@@ -266,7 +271,8 @@ void Application::onRender()
 
     RenderContext ctx;
     ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
-    ctx.setLight({0.0f, -1.0f, -0.5f}, 0.3f, 0.7f);
+    Vec3 dir = {lightSettings_.direction.x, lightSettings_.direction.y, lightSettings_.direction.z};
+    ctx.setLight(dir, lightSettings_.ambient, lightSettings_.diffuse);
     scene_->buildRenderCommands(ctx);
     lastRenderCommandCount_ = ctx.commands().size();
 

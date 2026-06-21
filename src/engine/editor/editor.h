@@ -1,5 +1,7 @@
 #pragma once
 
+#include "renderer/render_types.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -26,6 +28,7 @@ public:
     void drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
 
     void setRenderer(MetalRenderer* renderer) { renderer_ = renderer; }
+    void setLightSettings(LightSettings* settings) { lightSettings_ = settings; }
 
     const GameObject* selected() const { return selected_; }
     void setSelected(GameObject* obj) { selected_ = obj; }
@@ -39,10 +42,12 @@ private:
     void drawScriptRunner(Scene& scene);
     void drawScreenshotPanel(Scene& scene);
     void drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
+    void drawLightingPanel();
 
     bool initialized_ = false;
     GameObject* selected_ = nullptr;
     MetalRenderer* renderer_ = nullptr;
+    LightSettings* lightSettings_ = nullptr;
     char nameBuffer_[128] = {};
     char commandBuffer_[256] = {};
     std::string consoleOutput_;

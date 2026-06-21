@@ -4,6 +4,7 @@
 #include "core/cli_options.h"
 #include "core/input_state.h"
 #include "core/time.h"
+#include "renderer/render_types.h"
 #include "scene/camera.h"
 
 #include <cstddef>
@@ -46,6 +47,9 @@ public:
     size_t lastRenderCommandCount() const { return lastRenderCommandCount_; }
 
     bool liveSimulation() const { return liveSimulation_; }
+
+    LightSettings& lightSettings() { return lightSettings_; }
+    const LightSettings& lightSettings() const { return lightSettings_; }
 
     // Input events from the platform window.
     void onKeyEvent(int keyCode, bool down);
@@ -96,4 +100,6 @@ private:
 
     std::string lastAssertionFailure_;
     bool automationFailed_ = false;
+
+    LightSettings lightSettings_;
 };
