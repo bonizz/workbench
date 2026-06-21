@@ -33,3 +33,21 @@ bool intersectRayAABB(const Vec3& origin,
 
 // Intersect a ray with the unit plane primitive: y=0, x/z in [-1,1].
 bool intersectRayPlane(const Vec3& origin, const Vec3& dir, float& t);
+
+// Translate gizmo (milestone 0.11). The handle is a small sphere drawn at the
+// selected object's origin; the same radius is used to draw it and to pick it.
+constexpr float kGizmoHandleRadius = 0.25f;
+
+// Intersect a ray with the unbounded horizontal plane y = planeY. Returns false
+// if the ray is parallel to the plane or the hit is behind the origin. On hit,
+// fills hitPoint. Unlike intersectRayPlane this has no x/z bounds and supports
+// an arbitrary height, which the gizmo drag needs.
+bool intersectRayHorizontalPlane(const Vec3& origin,
+                                 const Vec3& dir,
+                                 float planeY,
+                                 Vec3& hitPoint);
+
+// Gizmo drag move: keep Y, apply the XZ offset captured at drag start. The
+// caller captures dragOffset = objectPos - hitPoint (XZ only) when the drag
+// begins; this reconstructs the new position from a later plane hit.
+Vec3 planeDragPosition(const Vec3& hitPoint, const Vec3& dragOffset, float preservedY);

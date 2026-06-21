@@ -153,6 +153,21 @@
                                                       static_cast<float>(pt.y));
 }
 
+- (void)mouseDragged:(NSEvent*)event {
+    if (!self.workbenchWindow) return;
+    NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+    self.workbenchWindow->application().onLeftMouseMove(static_cast<float>(pt.x),
+                                                        static_cast<float>(pt.y));
+}
+
+- (void)mouseUp:(NSEvent*)event {
+    if (!self.workbenchWindow) return;
+    NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+    self.workbenchWindow->application().onMouseButton(0, false,
+                                                      static_cast<float>(pt.x),
+                                                      static_cast<float>(pt.y));
+}
+
 - (void)scrollWheel:(NSEvent*)event {
     if (!self.workbenchWindow) return;
     self.workbenchWindow->application().onScroll(static_cast<float>(event.deltaY));

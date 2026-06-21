@@ -44,7 +44,9 @@ public:
 
     // Uses each object's worldMatrix() (parent * local). Refreshes world
     // transforms first so editor direct-edits are reflected immediately.
-    void buildRenderCommands(RenderContext& ctx);
+    // If selected is non-null and refers to an active object with a
+    // MeshRenderer, an extra highlight overlay command is emitted for it.
+    void buildRenderCommands(RenderContext& ctx, const GameObject* selected = nullptr);
 
     // Returns the nearest active MeshRenderer object hit by the world-space ray,
     // or nullptr. The camera and inactive objects are never pickable. World

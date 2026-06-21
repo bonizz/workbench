@@ -16,6 +16,10 @@ struct RenderCommand
     simd::float4x4 transform = simd::float4x4(1.0f);
     simd::float4 color = {1.0f, 1.0f, 1.0f, 1.0f};
 
+    // Selection highlight overlay (a scaled-up translucent copy of the selected
+    // mesh). Drawn like any other mesh; this flag exists for inspection/tests.
+    bool highlight = false;
+
     // Ground plane only
     float gridScale = 1.0f;
     float gridMajorDiv = 10.0f;

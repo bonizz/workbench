@@ -125,13 +125,16 @@ MetalRenderer::MetalRenderer(void* nativeMetalLayer)
     impl_->layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     impl_->layer.framebufferOnly = NO;
 
+    // Blending is enabled so the translucent selection-highlight overlay reads
+    // over the base mesh. Opaque meshes use alpha 1.0, for which blending is a
+    // no-op (src*1 + dst*0 = src).
     impl_->meshPipeline = loadPipeline(impl_->device,
                                        "assets/shaders/basic.metal",
                                        "vertex_main",
                                        "fragment_main",
                                        MTLPixelFormatBGRA8Unorm,
                                        MTLPixelFormatDepth32Float,
-                                       false);
+                                       true);
 
     impl_->gridPipeline = loadPipeline(impl_->device,
                                        "assets/shaders/grid.metal",

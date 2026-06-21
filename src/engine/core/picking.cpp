@@ -127,3 +127,30 @@ bool intersectRayPlane(const Vec3& origin, const Vec3& dir, float& t)
 
     return true;
 }
+
+bool intersectRayHorizontalPlane(const Vec3& origin,
+                                 const Vec3& dir,
+                                 float planeY,
+                                 Vec3& hitPoint)
+{
+    if (std::fabs(dir.y) < kEpsilon) {
+        return false;
+    }
+
+    float t = (planeY - origin.y) / dir.y;
+    if (t < 0.0f) {
+        return false;
+    }
+
+    hitPoint = {
+        origin.x + t * dir.x,
+        origin.y + t * dir.y,
+        origin.z + t * dir.z
+    };
+    return true;
+}
+
+Vec3 planeDragPosition(const Vec3& hitPoint, const Vec3& dragOffset, float preservedY)
+{
+    return {hitPoint.x + dragOffset.x, preservedY, hitPoint.z + dragOffset.z};
+}

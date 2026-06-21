@@ -14,12 +14,13 @@ void RenderContext::setLight(const Vec3& direction, float ambient, float diffuse
     light_.diffuse = diffuse;
 }
 
-void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color)
+void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color, bool highlight)
 {
     RenderCommand cmd;
     cmd.type = shape;
     cmd.transform = transform;
     cmd.color = color;
+    cmd.highlight = highlight;
     commands_.push_back(cmd);
 }
 

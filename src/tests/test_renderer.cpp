@@ -211,4 +211,129 @@ void runTestRenderer()
         assert(cmds[2].type == ShapeType::Sphere);
         assert(cmds[3].type == ShapeType::Plane);
     }
+
+    auto countHighlights = [](const RenderContext& ctx) {
+        std::size_t n = 0;
+        for (const auto& cmd : ctx.commands()) {
+            if (cmd.highlight) ++n;
+        }
+        return n;
+    };
+
+    // Selecting a MeshRenderer object emits exactly one highlight overlay,
+    // matching the object's shape, drawn right after its normal command, then a
+    // translate gizmo handle (opaque sphere) at the object's origin.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* sphereObj = scene.createObject("Sphere");
+        sphereObj->transform().position = {4.0f, 1.0f, -2.0f};
+        auto sphereMesh = std::make_unique<MeshRenderer>();
+        sphereMesh->shape = scene::MeshShape::Sphere;
+        sphereObj->addComponent(std::move(sphereMesh));
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, sphereObj);
+
+        const auto& cmds = ctx.commands();
+        assert(cmds.size() == 4); // ground + sphere + highlight + gizmo handle
+        assert(cmds[1].type == ShapeType::Sphere);
+        assert(!cmds[1].highlight);
+        assert(cmds[2].type == ShapeType::Sphere);
+        assert(cmds[2].highlight);
+        assert(countHighlights(ctx) == 1);
+
+        // The gizmo handle: opaque yellow sphere, not a highlight, sitting at
+        // the selected object's world origin.
+        const RenderCommand& gizmo = cmds[3];
+        assert(gizmo.type == ShapeType::Sphere);
+        assert(!gizmo.highlight);
+        assert(gizmo.color.w == 1.0f); // opaque, unlike the translucent highlight
+        simd::float4 gp = gizmo.transform.columns[3];
+        assert(std::fabs(gp.x - 4.0f) < 1e-4f);
+        assert(std::fabs(gp.y - 1.0f) < 1e-4f);
+        assert(std::fabs(gp.z + 2.0f) < 1e-4f);
+    }
+
+    // No highlight for a null selection.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* cubeObj = scene.createObject("Cube");
+        cubeObj->addComponent(std::make_unique<MeshRenderer>());
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, nullptr);
+
+        assert(ctx.commands().size() == 2); // ground + cube, no overlay
+        assert(countHighlights(ctx) == 0);
+    }
+
+    // The camera is never highlightable (it has no MeshRenderer).
+    {
+        Scene scene;
+        Camera* cam = scene.createCamera({0.0f, 0.0f, 0.0f});
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, cam);
+
+        assert(countHighlights(ctx) == 0);
+    }
+
+    // An inactive object is neither drawn nor highlighted, even when selected.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* cubeObj = scene.createObject("Cube");
+        cubeObj->addComponent(std::make_unique<MeshRenderer>());
+        cubeObj->setActive(false);
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, cubeObj);
+
+        assert(ctx.commands().size() == 1); // ground only
+        assert(countHighlights(ctx) == 0);
+    }
+
+    // An object without a MeshRenderer is not highlighted.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* empty = scene.createObject("Empty");
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, empty);
+
+        assert(ctx.commands().size() == 1); // ground only
+        assert(countHighlights(ctx) == 0);
+    }
+
+    // The highlight respects world transforms: a selected child under a
+    // translated parent gets an overlay centered on the child's world position.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* parent = scene.createObject("Parent");
+        parent->transform().position = {5.0f, 0.0f, 0.0f};
+        GameObject* child = scene.createObject("Child");
+        child->transform().position = {2.0f, 0.0f, 0.0f};
+        child->addComponent(std::make_unique<MeshRenderer>());
+        scene.setParent(child, parent);
+
+        RenderContext ctx;
+        scene.buildRenderCommands(ctx, child);
+
+        assert(countHighlights(ctx) == 1);
+        const RenderCommand* highlight = nullptr;
+        for (const auto& cmd : ctx.commands()) {
+            if (cmd.highlight) highlight = &cmd;
+        }
+        assert(highlight != nullptr);
+        // Scaling about the local origin leaves the translation column intact,
+        // so the overlay sits at the child's world position (5 + 2 = 7).
+        simd::float4 t = highlight->transform.columns[3];
+        assert(std::fabs(t.x - 7.0f) < 1e-4f);
+        assert(std::fabs(t.y - 0.0f) < 1e-4f);
+        assert(std::fabs(t.z - 0.0f) < 1e-4f);
+    }
 }

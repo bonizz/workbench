@@ -134,9 +134,20 @@ ShapeType toRenderShape(scene::MeshShape shape)
     return ShapeType::Cube;
 }
 
+// Selection highlight overlay: a scaled-up translucent yellow copy of the
+// selected mesh, drawn right after its normal command so the base reads through.
+constexpr simd::float4 kHighlightColor = {1.0f, 0.85f, 0.1f, 0.5f};
+constexpr float kHighlightScale = 1.04f;
+
+// Translate gizmo handle: a small opaque yellow sphere at the selected object's
+// origin. Drawn here (next to the highlight) so the editor's selection visuals
+// live in one place. Its size matches kGizmoHandleRadius so the handle you see
+// is the handle you click in Application's pick test.
+constexpr simd::float4 kGizmoColor = {1.0f, 0.85f, 0.1f, 1.0f};
+
 } // namespace
 
-void Scene::buildRenderCommands(RenderContext& ctx)
+void Scene::buildRenderCommands(RenderContext& ctx, const GameObject* selected)
 {
     // Refresh first so editor direct-edits to local fields are reflected.
     updateWorldTransforms();
@@ -146,7 +157,18 @@ void Scene::buildRenderCommands(RenderContext& ctx)
     for (const auto& obj : objects_) {
         if (!obj->active()) continue;
         if (MeshRenderer* mesh = obj->getComponent<MeshRenderer>()) {
-            ctx.drawShape(toRenderShape(mesh->shape), obj->transform().worldMatrix(), mesh->color);
+            const Mat4& world = obj->transform().worldMatrix();
+            ctx.drawShape(toRenderShape(mesh->shape), world, mesh->color);
+            if (obj.get() == selected) {
+                Mat4 overlay = multiply(world, scale(kHighlightScale, kHighlightScale, kHighlightScale));
+                ctx.drawShape(toRenderShape(mesh->shape), overlay, kHighlightColor, /*highlight=*/true);
+
+                // Translate gizmo handle at the object's world origin.
+                simd::float4 wp = world.columns[3];
+                Mat4 handle = multiply(translation(wp.x, wp.y, wp.z),
+                                       scale(kGizmoHandleRadius, kGizmoHandleRadius, kGizmoHandleRadius));
+                ctx.drawShape(ShapeType::Sphere, handle, kGizmoColor);
+            }
         }
     }
 }

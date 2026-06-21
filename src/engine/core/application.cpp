@@ -329,7 +329,7 @@ void Application::onRender()
     ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
     Vec3 dir = {lightSettings_.direction.x, lightSettings_.direction.y, lightSettings_.direction.z};
     ctx.setLight(dir, lightSettings_.ambient, lightSettings_.diffuse);
-    scene_->buildRenderCommands(ctx);
+    scene_->buildRenderCommands(ctx, editor_->selected());
     lastRenderCommandCount_ = ctx.commands().size();
 
     renderer_->draw(ctx, clearColor_, [this](void* commandBuffer, void* renderEncoder, void* renderPassDescriptor) {
@@ -373,9 +373,75 @@ void Application::onScroll(float delta)
     scrollDelta_ += delta;
 }
 
+Ray Application::rayFromPixel(float x, float y) const
+{
+    float width = window_->width();
+    float height = window_->height();
+    float ndcX = (x / width) * 2.0f - 1.0f;
+    float ndcY = (y / height) * 2.0f - 1.0f;
+
+    return makeCameraRay(scene_->camera().transform().position,
+                         scene_->camera().viewMatrix(),
+                         renderer_->aspectRatio(),
+                         60.0f * kDegToRad,
+                         ndcX,
+                         ndcY);
+}
+
 void Application::onMouseButton(int button, bool down, float x, float y)
 {
-    if (button != 0 || !down) {
+    if (button != 0) {
+        return;
+    }
+
+    // Mouse up always ends any gizmo drag, even over an ImGui panel, so the
+    // drag state never lingers past a release.
+    if (!down) {
+        gizmoDragging_ = false;
+        gizmoDragTarget_ = nullptr;
+        return;
+    }
+
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
+    float width = window_->width();
+    float height = window_->height();
+    if (width <= 0.0f || height <= 0.0f) {
+        return;
+    }
+
+    Ray ray = rayFromPixel(x, y);
+
+    // If a selected MeshRenderer's gizmo handle is clicked, begin a drag instead
+    // of reselecting. The handle is a sphere at the object's world origin.
+    GameObject* selected = const_cast<GameObject*>(editor_->selected());
+    if (selected && selected->getComponent<MeshRenderer>()) {
+        scene_->updateWorldTransforms();
+        simd::float4 wp = selected->transform().worldMatrix().columns[3];
+        Vec3 center = {wp.x, wp.y, wp.z};
+        Vec3 local = {ray.origin.x - center.x, ray.origin.y - center.y, ray.origin.z - center.z};
+        float t = 0.0f;
+        if (intersectRaySphere(local, ray.direction, kGizmoHandleRadius, t)) {
+            Vec3 planeHit;
+            if (intersectRayHorizontalPlane(ray.origin, ray.direction, center.y, planeHit)) {
+                gizmoDragging_ = true;
+                gizmoDragTarget_ = selected;
+                gizmoDragPlaneY_ = center.y;
+                gizmoDragOffset_ = {center.x - planeHit.x, 0.0f, center.z - planeHit.z};
+                return;
+            }
+        }
+    }
+
+    GameObject* hit = scene_->pickObject(ray.origin, ray.direction);
+    editor_->setSelected(hit);
+}
+
+void Application::onLeftMouseMove(float x, float y)
+{
+    if (!gizmoDragging_ || gizmoDragTarget_ == nullptr) {
         return;
     }
     if (ImGui::GetIO().WantCaptureMouse) {
@@ -388,16 +454,14 @@ void Application::onMouseButton(int button, bool down, float x, float y)
         return;
     }
 
-    float ndcX = (x / width) * 2.0f - 1.0f;
-    float ndcY = (y / height) * 2.0f - 1.0f;
+    Ray ray = rayFromPixel(x, y);
+    Vec3 hit;
+    if (!intersectRayHorizontalPlane(ray.origin, ray.direction, gizmoDragPlaneY_, hit)) {
+        return;
+    }
 
-    Ray ray = makeCameraRay(scene_->camera().transform().position,
-                            scene_->camera().viewMatrix(),
-                            renderer_->aspectRatio(),
-                            60.0f * kDegToRad,
-                            ndcX,
-                            ndcY);
-
-    GameObject* hit = scene_->pickObject(ray.origin, ray.direction);
-    editor_->setSelected(hit);
+    // Update X/Z only; Y is preserved by planeDragPosition. Edits the local
+    // position (matches the inspector); for an unparented object local == world.
+    gizmoDragTarget_->transform().position =
+        planeDragPosition(hit, gizmoDragOffset_, gizmoDragPlaneY_);
 }

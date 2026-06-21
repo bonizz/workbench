@@ -3,6 +3,7 @@
 #include "agent/test_suite.h"
 #include "core/cli_options.h"
 #include "core/input_state.h"
+#include "core/picking.h"
 #include "core/time.h"
 #include "renderer/render_types.h"
 #include "scene/camera.h"
@@ -16,6 +17,7 @@ class Window;
 class MetalRenderer;
 class Editor;
 class Scene;
+class GameObject;
 
 enum class AutomationState
 {
@@ -58,9 +60,14 @@ public:
     void onMouseDrag(float deltaX, float deltaY);
     void onScroll(float delta);
     void onMouseButton(int button, bool down, float x, float y);
+    // Left-button drag move (absolute viewport pixel position). Drives the
+    // translate gizmo; ignored unless a gizmo drag is in progress.
+    void onLeftMouseMove(float x, float y);
 
 private:
     void recreateScene();
+    // Builds a world-space camera ray from a viewport pixel position.
+    Ray rayFromPixel(float x, float y) const;
     void runAutomation();
     void runTestSuite();
     void waitForPendingScreenshot();
@@ -82,6 +89,13 @@ private:
     float mouseDeltaX_ = 0.0f;
     float mouseDeltaY_ = 0.0f;
     float scrollDelta_ = 0.0f;
+
+    // Translate gizmo drag state (milestone 0.11). Owned here because all input,
+    // camera, and ray math live in Application; selection itself stays in Editor.
+    bool gizmoDragging_ = false;
+    Vec3 gizmoDragOffset_ = {};
+    float gizmoDragPlaneY_ = 0.0f;
+    GameObject* gizmoDragTarget_ = nullptr;
 
     float clearColor_[4] = {0.03f, 0.05f, 0.08f, 1.0f};
 
