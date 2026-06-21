@@ -185,7 +185,7 @@
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
     (void)sender;
     if (Window* w = self.workbenchWindow) {
-        w->application().saveWindowSize();
+        w->application().saveSettings();
     }
     return NSTerminateNow;
 }
@@ -331,4 +331,19 @@ void Window::setSize(int width, int height)
 {
     impl_->width = width;
     impl_->height = height;
+}
+
+float Window::x() const
+{
+    return static_cast<float>(impl_->window.frame.origin.x);
+}
+
+float Window::y() const
+{
+    return static_cast<float>(impl_->window.frame.origin.y);
+}
+
+void Window::setPosition(int x, int y)
+{
+    [impl_->window setFrameOrigin:NSMakePoint(x, y)];
 }

@@ -48,6 +48,12 @@ private:
     void loadWindowStates();
     void saveWindowStates();
 
+public:
+    // Persist current panel visibility. Safe to call while the editor is still
+    // alive (e.g. from the platform close handler).
+    void saveSettings() { saveWindowStates(); }
+
+private:
     bool initialized_ = false;
     bool showHierarchy_ = true;
     bool showInspector_ = true;

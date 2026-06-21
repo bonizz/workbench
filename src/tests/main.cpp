@@ -819,6 +819,33 @@ int main()
         assert(height == 768);
     }
 
+    // Settings: window position round-trip.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.json"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_position.json";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        Settings::saveWindowPosition(120, 240);
+
+        int x = 0;
+        int y = 0;
+        assert(Settings::loadWindowPosition(x, y));
+        assert(x == 120);
+        assert(y == 240);
+    }
+
     // Settings: editor window state round-trip and preservation.
     {
         struct SettingsPathGuard {

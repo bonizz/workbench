@@ -75,6 +75,33 @@ void saveWindowSize(int width, int height)
     saveJson(j);
 }
 
+bool loadWindowPosition(int& x, int& y)
+{
+    json j = loadJson();
+    json window = j.value("window", json::object());
+
+    if (!window.contains("x") || !window.contains("y")) {
+        return false;
+    }
+
+    try {
+        x = window["x"].get<int>();
+        y = window["y"].get<int>();
+    } catch (...) {
+        return false;
+    }
+
+    return true;
+}
+
+void saveWindowPosition(int x, int y)
+{
+    json j = loadJson();
+    j["window"]["x"] = x;
+    j["window"]["y"] = y;
+    saveJson(j);
+}
+
 bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states)
 {
     json j = loadJson();

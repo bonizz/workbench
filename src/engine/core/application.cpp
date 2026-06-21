@@ -40,6 +40,13 @@ bool Application::init()
     }
 
     window_ = std::make_unique<Window>(*this, "Workbench", windowWidth, windowHeight);
+
+    int windowX = 0;
+    int windowY = 0;
+    if (Settings::loadWindowPosition(windowX, windowY)) {
+        window_->setPosition(windowX, windowY);
+    }
+
     renderer_ = std::make_unique<MetalRenderer>(window_->metalLayer());
     editor_ = std::make_unique<Editor>();
 
@@ -79,6 +86,7 @@ bool Application::init()
 int Application::run()
 {
     window_->run();
+    shutdown();
     return exitCode();
 }
 
@@ -99,11 +107,20 @@ void Application::saveWindowSize()
     }
 }
 
-void Application::shutdown()
+void Application::saveSettings()
 {
     if (window_) {
         Settings::saveWindowSize(static_cast<int>(window_->width()), static_cast<int>(window_->height()));
+        Settings::saveWindowPosition(static_cast<int>(window_->x()), static_cast<int>(window_->y()));
     }
+    if (editor_) {
+        editor_->saveSettings();
+    }
+}
+
+void Application::shutdown()
+{
+    saveSettings();
 
     editor_.reset();
     renderer_.reset();

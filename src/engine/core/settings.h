@@ -11,6 +11,12 @@ bool loadWindowSize(int& width, int& height);
 // Save the current window size.
 void saveWindowSize(int width, int height);
 
+// Load the last saved window position. Returns false if no valid settings exist.
+bool loadWindowPosition(int& x, int& y);
+
+// Save the current window position.
+void saveWindowPosition(int x, int y);
+
 // Load editor panel visibility state. The map keys are panel names (without the
 // "show_" prefix written to disk). Returns true if any states were loaded.
 bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states);

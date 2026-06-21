@@ -20,6 +20,11 @@ public:
     float width() const;
     float height() const;
 
+    // Screen-space window position (bottom-left origin on macOS).
+    float x() const;
+    float y() const;
+    void setPosition(int x, int y);
+
     void setSize(int width, int height);
     float backingScale() const;
     const char* title() const;
