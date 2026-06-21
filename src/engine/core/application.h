@@ -41,6 +41,12 @@ public:
     void saveWindowSize();
     void saveSettings();
 
+    // Scene menu actions (called by Editor).
+    void newScene();
+    void saveScene();
+    void markSceneDirty();
+    bool sceneDirty() const { return sceneDirty_; }
+
     // Called by the platform window each frame.
     void onUpdate(float deltaTime);
     void onRender();
@@ -113,4 +119,7 @@ private:
 
     std::string lastAssertionFailure_;
     bool automationFailed_ = false;
+    bool sceneDirty_ = false;
+
+    void updateWindowTitle();
 };

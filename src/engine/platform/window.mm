@@ -223,14 +223,14 @@
 struct Window::Impl
 {
     Application& app;
-    const char* title;
+    std::string title;
     int width;
     int height;
     NSWindow* window;
     NSView* view;
 
     Impl(Application& a, const char* t, int w, int h)
-        : app(a), title(t), width(w), height(h), window(nil), view(nil)
+        : app(a), title(t ? t : ""), width(w), height(h), window(nil), view(nil)
     {
         NSRect frame = NSMakeRect(0, 0, width, height);
         NSWindowStyleMask style = NSWindowStyleMaskTitled |
@@ -347,13 +347,20 @@ float Window::backingScale() const
 
 const char* Window::title() const
 {
-    return impl_->title;
+    return impl_->title.c_str();
 }
 
 void Window::setSize(int width, int height)
 {
     impl_->width = width;
     impl_->height = height;
+}
+
+void Window::setTitle(const char* title)
+{
+    if (!title) return;
+    impl_->title = title;
+    [impl_->window setTitle:[NSString stringWithUTF8String:title]];
 }
 
 float Window::x() const

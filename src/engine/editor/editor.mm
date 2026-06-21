@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "core/application.h"
 #include "agent/command.h"
 #include "agent/script_runner.h"
 #include "capture/capture.h"
@@ -134,10 +135,31 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     }
 }
 
+void Editor::markSceneDirty()
+{
+    if (application_) {
+        application_->markSceneDirty();
+    }
+}
+
 void Editor::drawMainMenuBar(Scene& scene)
 {
     if (!ImGui::BeginMainMenuBar()) {
         return;
+    }
+
+    if (ImGui::BeginMenu("Scene")) {
+        if (ImGui::MenuItem("New")) {
+            if (application_) {
+                application_->newScene();
+            }
+        }
+        if (ImGui::MenuItem("Save", "Ctrl+S")) {
+            if (application_) {
+                application_->saveScene();
+            }
+        }
+        ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu("Windows")) {
@@ -167,6 +189,7 @@ void Editor::drawMainMenuBar(Scene& scene)
     if (ImGui::BeginMenu("Camera")) {
         if (ImGui::MenuItem("Reset Camera")) {
             scene.camera().reset();
+            markSceneDirty();
         }
         ImGui::EndMenu();
     }
@@ -200,6 +223,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
                 if (p->DataSize == sizeof(GameObject*)) {
                     GameObject* dragged = *static_cast<GameObject**>(p->Data);
                     scene.setParent(dragged, nullptr);
+                    markSceneDirty();
                 }
             }
             ImGui::EndDragDropTarget();
@@ -217,6 +241,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         obj->addComponent(std::move(mesh));
         selected_ = obj;
         std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+        markSceneDirty();
     }
 
     bool canModifySelection = selected_ && !scene.isCamera(selected_);
@@ -228,6 +253,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         if (dup) {
             selected_ = dup;
             std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", dup->name().c_str());
+            markSceneDirty();
         }
     }
 
@@ -236,6 +262,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         scene.deleteObject(selected_);
         selected_ = nullptr;
         nameBuffer_[0] = '\0';
+        markSceneDirty();
     }
     ImGui::EndDisabled();
 
@@ -243,6 +270,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
     ImGui::BeginDisabled(!(canModifySelection && selected_->parent() != nullptr));
     if (ImGui::Button("Detach")) {
         scene.setParent(selected_, nullptr);
+        markSceneDirty();
     }
     ImGui::EndDisabled();
 
@@ -285,6 +313,7 @@ void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)
                 GameObject* dragged = *static_cast<GameObject**>(p->Data);
                 if (dragged != obj) {
                     scene.setParent(dragged, obj);
+                    markSceneDirty();
                 }
             }
         }
@@ -315,6 +344,7 @@ void Editor::drawInspector()
 
     if (ImGui::InputText("Name", nameBuffer_, sizeof(nameBuffer_))) {
         selected_->setName(nameBuffer_);
+        markSceneDirty();
     }
 
     // Read-only hierarchy readout (local authoring stays in Transform below).
@@ -333,9 +363,15 @@ void Editor::drawInspector()
     Vec3& rotation = selected_->transform().rotation;
     Vec3& scale = selected_->transform().scale;
 
-    ImGui::DragFloat3("Position", &position.x, 0.1f);
-    ImGui::DragFloat3("Rotation", &rotation.x, 0.05f);
-    ImGui::DragFloat3("Scale", &scale.x, 0.05f);
+    if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
+        markSceneDirty();
+    }
+    if (ImGui::DragFloat3("Rotation", &rotation.x, 0.05f)) {
+        markSceneDirty();
+    }
+    if (ImGui::DragFloat3("Scale", &scale.x, 0.05f)) {
+        markSceneDirty();
+    }
 
     ImGui::Separator();
     ImGui::Text("Components");
@@ -348,17 +384,21 @@ void Editor::drawInspector()
         int current = static_cast<int>(mesh->shape);
         if (ImGui::Combo("Shape", &current, shapeNames, IM_ARRAYSIZE(shapeNames))) {
             mesh->shape = static_cast<scene::MeshShape>(current);
+            markSceneDirty();
         }
 
         float color[4] = {mesh->color.x, mesh->color.y, mesh->color.z, mesh->color.w};
         if (ImGui::ColorEdit4("Color", color)) {
             mesh->color = {color[0], color[1], color[2], color[3]};
+            markSceneDirty();
         }
     }
 
     if (scene::RotateComponent* rot = selected_->getComponent<scene::RotateComponent>()) {
         ImGui::Text("RotateComponent");
-        ImGui::DragFloat3("Angular Velocity", &rot->angularVelocityEuler.x, 1.0f);
+        if (ImGui::DragFloat3("Angular Velocity", &rot->angularVelocityEuler.x, 1.0f)) {
+            markSceneDirty();
+        }
     }
 
     ImGui::Separator();
@@ -368,6 +408,7 @@ void Editor::drawInspector()
         auto mesh = std::make_unique<MeshRenderer>();
         mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
         selected_->addComponent(std::move(mesh));
+        markSceneDirty();
     }
     ImGui::EndDisabled();
 
@@ -376,6 +417,7 @@ void Editor::drawInspector()
     ImGui::BeginDisabled(selected_->hasComponent<scene::RotateComponent>());
     if (ImGui::Button("Add RotateComponent")) {
         selected_->addComponent(std::make_unique<scene::RotateComponent>());
+        markSceneDirty();
     }
     ImGui::EndDisabled();
 
@@ -399,37 +441,49 @@ void Editor::drawLightingPanel()
     float dir[3] = {lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z};
     if (ImGui::DragFloat3("Direction", dir, 0.01f)) {
         lightSettings_->direction = {dir[0], dir[1], dir[2]};
+        markSceneDirty();
     }
 
     Vec3 n = normalize({lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z});
     ImGui::Text("Normalized: %.3f, %.3f, %.3f", n.x, n.y, n.z);
 
-    ImGui::SliderFloat("Ambient", &lightSettings_->ambient, 0.0f, 1.0f);
-    ImGui::SliderFloat("Diffuse", &lightSettings_->diffuse, 0.0f, 2.0f);
+    if (ImGui::SliderFloat("Ambient", &lightSettings_->ambient, 0.0f, 1.0f)) {
+        markSceneDirty();
+    }
+    if (ImGui::SliderFloat("Diffuse", &lightSettings_->diffuse, 0.0f, 2.0f)) {
+        markSceneDirty();
+    }
 
     if (skySettings_) {
         if (ImGui::CollapsingHeader("Sky")) {
             float horizon[3] = {skySettings_->horizonColor.x, skySettings_->horizonColor.y, skySettings_->horizonColor.z};
             if (ImGui::ColorEdit3("Horizon", horizon)) {
                 skySettings_->horizonColor = {horizon[0], horizon[1], horizon[2]};
+                markSceneDirty();
             }
 
             float zenith[3] = {skySettings_->zenithColor.x, skySettings_->zenithColor.y, skySettings_->zenithColor.z};
             if (ImGui::ColorEdit3("Zenith", zenith)) {
                 skySettings_->zenithColor = {zenith[0], zenith[1], zenith[2]};
+                markSceneDirty();
             }
 
             float sun[3] = {skySettings_->sunColor.x, skySettings_->sunColor.y, skySettings_->sunColor.z};
             if (ImGui::ColorEdit3("Sun", sun)) {
                 skySettings_->sunColor = {sun[0], sun[1], sun[2]};
+                markSceneDirty();
             }
 
             // sunSize is the sun's angular radius in radians (consumed directly
             // by sky.metal's acos comparison). Log scale + 4 decimals give usable
             // resolution at the small end of the 0.001..0.05 rad range.
-            ImGui::SliderFloat("Sun Radius (rad)", &skySettings_->sunSize, 0.001f, 0.05f,
-                               "%.4f", ImGuiSliderFlags_Logarithmic);
-            ImGui::SliderFloat("Sun Intensity", &skySettings_->sunIntensity, 0.0f, 5.0f);
+            if (ImGui::SliderFloat("Sun Radius (rad)", &skySettings_->sunSize, 0.001f, 0.05f,
+                               "%.4f", ImGuiSliderFlags_Logarithmic)) {
+                markSceneDirty();
+            }
+            if (ImGui::SliderFloat("Sun Intensity", &skySettings_->sunIntensity, 0.0f, 5.0f)) {
+                markSceneDirty();
+            }
 
             if (lightSettings_) {
                 ImGui::SeparatorText("Presets");
@@ -441,6 +495,7 @@ void Editor::drawLightingPanel()
                     if (ImGui::Button(presets[i].name)) {
                         *lightSettings_ = presets[i].light;
                         *skySettings_ = presets[i].sky;
+                        markSceneDirty();
                     }
                 }
             }
@@ -589,6 +644,7 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
 
     if (ImGui::Button("Reset Camera")) {
         scene.camera().reset();
+        markSceneDirty();
     }
 
     ImGui::End();

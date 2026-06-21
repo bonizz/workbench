@@ -63,6 +63,7 @@ bool Application::init()
     if (!editor_->init(window_->nativeView(), renderer_->device())) {
         return false;
     }
+    editor_->setApplication(this);
     editor_->setRenderer(renderer_.get());
 
     scene_ = std::make_unique<Scene>();
@@ -110,6 +111,8 @@ bool Application::init()
         cube->addComponent(std::move(mesh));
     }
 
+    updateWindowTitle();
+
     onResize(window_->width(), window_->height(), window_->backingScale());
 
     return true;
@@ -151,6 +154,85 @@ void Application::saveSettings()
     }
     if (liveSimulation_ && scene_ && !scene_->loadedScenePath().empty()) {
         Settings::saveLastScene(scene_->loadedScenePath());
+    }
+}
+
+void Application::updateWindowTitle()
+{
+    if (!window_) {
+        return;
+    }
+
+    std::string title = "Workbench";
+    std::string path = scene_ ? scene_->loadedScenePath() : std::string();
+    if (!path.empty()) {
+        size_t pos = path.find_last_of("/\\");
+        std::string name = (pos == std::string::npos) ? path : path.substr(pos + 1);
+        title += " - " + name;
+    } else {
+        title += " - Untitled";
+    }
+    if (sceneDirty_) {
+        title += " *";
+    }
+    window_->setTitle(title.c_str());
+}
+
+void Application::newScene()
+{
+    recreateScene();
+
+    if (scene_) {
+        bool loadedDefault = false;
+        if (std::filesystem::exists("assets/scenes/default.scene.json")) {
+            std::string error;
+            std::string warning;
+            loadedDefault = SceneSerializer::load(*scene_, "assets/scenes/default.scene.json", error, &warning);
+        }
+
+        if (!loadedDefault) {
+            // Built-in fallback: the historical hard-coded cube.
+            GameObject* cube = scene_->createObject("Cube");
+            cube->transform().position = {0.0f, 0.5f, 0.0f};
+            cube->transform().scale = {0.5f, 0.5f, 0.5f};
+            auto mesh = std::make_unique<MeshRenderer>();
+            mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+            cube->addComponent(std::move(mesh));
+        }
+
+        if (!liveSimulation_) {
+            scene_->camera().reset();
+        }
+
+        scene_->setLoadedScenePath("");
+    }
+
+    sceneDirty_ = false;
+    updateWindowTitle();
+}
+
+void Application::saveScene()
+{
+    if (!scene_ || scene_->loadedScenePath().empty()) {
+        // Save As is not implemented yet.
+        return;
+    }
+
+    std::string error;
+    if (SceneSerializer::save(*scene_, scene_->loadedScenePath(), error)) {
+        sceneDirty_ = false;
+        if (liveSimulation_) {
+            Settings::saveLastScene(scene_->loadedScenePath());
+        }
+        updateWindowTitle();
+    }
+}
+
+void Application::markSceneDirty()
+{
+    if (!sceneDirty_) {
+        sceneDirty_ = true;
+        updateWindowTitle();
     }
 }
 
@@ -291,6 +373,12 @@ void Application::onUpdate(float deltaTime)
 
     scene_->camera().update(time_.deltaTime(), input);
 
+    if (input.forward || input.backward || input.left || input.right ||
+        input.up || input.down || input.mouseDeltaX != 0.0f ||
+        input.mouseDeltaY != 0.0f || input.scrollDelta != 0.0f) {
+        markSceneDirty();
+    }
+
     if (liveSimulation_) {
         scene_->update(time_.deltaTime());
     }
@@ -382,6 +470,7 @@ void Application::onMouseDrag(float deltaX, float deltaY)
 
     mouseDeltaX_ += deltaX;
     mouseDeltaY_ += deltaY;
+    markSceneDirty();
 }
 
 void Application::onScroll(float delta)
@@ -391,6 +480,7 @@ void Application::onScroll(float delta)
     }
 
     scrollDelta_ += delta;
+    markSceneDirty();
 }
 
 Ray Application::rayFromPixel(float x, float y) const
@@ -484,4 +574,5 @@ void Application::onLeftMouseMove(float x, float y)
     // position (matches the inspector); for an unparented object local == world.
     gizmoDragTarget_->transform().position =
         planeDragPosition(hit, gizmoDragOffset_, gizmoDragPlaneY_);
+    markSceneDirty();
 }

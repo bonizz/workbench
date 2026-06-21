@@ -26,6 +26,7 @@ public:
     void setPosition(int x, int y);
 
     void setSize(int width, int height);
+    void setTitle(const char* title);
     float backingScale() const;
     const char* title() const;
 

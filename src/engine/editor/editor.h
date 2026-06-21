@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+class Application;
 class MetalRenderer;
 class Scene;
 class GameObject;
@@ -27,6 +28,7 @@ public:
 
     void drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
 
+    void setApplication(Application* app) { application_ = app; }
     void setRenderer(MetalRenderer* renderer) { renderer_ = renderer; }
     void setLightSettings(LightSettings* settings) { lightSettings_ = settings; }
     void setSkySettings(SkySettings* settings) { skySettings_ = settings; }
@@ -36,6 +38,7 @@ public:
 
 private:
     void drawMainMenuBar(Scene& scene);
+    void markSceneDirty();
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
     void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();
@@ -59,6 +62,7 @@ public:
 
 private:
     bool initialized_ = false;
+    Application* application_ = nullptr;
     bool showHierarchy_ = true;
     bool showInspector_ = true;
     bool showLighting_ = true;
