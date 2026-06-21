@@ -2,6 +2,7 @@
 #include "agent/command.h"
 #include "agent/test_suite.h"
 #include "core/math.h"
+#include "core/settings.h"
 #include "platform/window.h"
 #include "renderer/metal_renderer.h"
 #include "renderer/render_context.h"
@@ -31,7 +32,14 @@ Application::~Application()
 
 bool Application::init()
 {
-    window_ = std::make_unique<Window>(*this, "Workbench", 800, 600);
+    int windowWidth = 800;
+    int windowHeight = 600;
+    if (Settings::loadWindowSize(windowWidth, windowHeight)) {
+        if (windowWidth < 640) windowWidth = 640;
+        if (windowHeight < 480) windowHeight = 480;
+    }
+
+    window_ = std::make_unique<Window>(*this, "Workbench", windowWidth, windowHeight);
     renderer_ = std::make_unique<MetalRenderer>(window_->metalLayer());
     editor_ = std::make_unique<Editor>();
 
@@ -86,6 +94,10 @@ int Application::exitCode() const
 
 void Application::shutdown()
 {
+    if (window_) {
+        Settings::saveWindowSize(static_cast<int>(window_->width()), static_cast<int>(window_->height()));
+    }
+
     editor_.reset();
     renderer_.reset();
     window_.reset();

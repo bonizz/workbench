@@ -19,6 +19,8 @@ public:
 
     float width() const;
     float height() const;
+
+    void setSize(int width, int height);
     float backingScale() const;
     const char* title() const;
 

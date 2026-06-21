@@ -110,6 +110,9 @@
 
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
+    if (Window* w = self.workbenchWindow) {
+        w->setSize(static_cast<int>(newSize.width), static_cast<int>(newSize.height));
+    }
     [self resizeRenderer];
     [self tick];
 }
@@ -312,4 +315,10 @@ float Window::backingScale() const
 const char* Window::title() const
 {
     return impl_->title;
+}
+
+void Window::setSize(int width, int height)
+{
+    impl_->width = width;
+    impl_->height = height;
 }
