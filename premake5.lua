@@ -1,3 +1,32 @@
+-- premake5 5.0.0-beta8's `ninja` action declares `depfile = $out.d` / `deps = gcc`
+-- on the cc/cxx compile rules but never tells clang to write that depfile. clang
+-- emits nothing, Ninja records `#deps 0`, and editing a header never triggers a
+-- rebuild -- the stale-object bug that used to force clean rebuilds.
+--
+-- The flags can't go in cflags: premake emits cflags as a global Ninja binding,
+-- where `$out` expands to empty (you'd get `-MF .d`, dumping every depfile into a
+-- single junk `.d` file). They have to live in the rule command, where `$out`
+-- resolves per edge -- exactly how premake's own pch rule already does it.
+--
+-- premake generates the rule text from an embedded module, so we override the
+-- rule emitters and inject the flags during generation. This keeps the fix in
+-- premake5.lua (no post-processing of generated .ninja files), so any plain
+-- `premake5 ninja` produces correct dependency tracking. The coupling to
+-- premake's private ninja internals is acceptable: the project is pinned to
+-- premake5 5.0.0-beta8, and premake.override throws loudly if these entry points
+-- ever disappear.
+local p = premake
+local ninja = p.modules.ninja
+local function injectDeps(text)
+    return (text:gsub("(%-c %$in %-o %$out)\n", "%1 -MMD -MP -MF $out.d\n"))
+end
+p.override(ninja.cpp, "cxxrule", function(base, cfg, toolset)
+    p.out(injectDeps(p.capture(function() base(cfg, toolset) end)))
+end)
+p.override(ninja.cpp, "ccrule", function(base, cfg, toolset)
+    p.out(injectDeps(p.capture(function() base(cfg, toolset) end)))
+end)
+
 workspace "workbench"
     configurations { "Debug", "Release" }
     architecture "arm64"
