@@ -73,3 +73,26 @@ When proposing architectural changes:
 * Explain what future problem the design solves.
 * Call out complexity costs.
 * Prefer iterative improvements.
+
+Screenshot Validation Policy
+
+Screenshot capture and image analysis are currently disabled unless explicitly
+requested by the user.
+
+For validation, prefer this order:
+
+1. Unit tests
+2. `.wbs` integration tests
+3. Assertions
+4. DebugState inspection
+5. Manual user verification (only when the user explicitly asks to check visually)
+
+Do not automatically capture screenshots or analyze rendered images.
+
+Only use screenshot capture or inspection when:
+
+* explicitly requested by the user, or
+* no other reasonable validation path exists.
+
+A screenshot should be considered a final smoke test, not a routine validation
+step.
