@@ -1,4 +1,5 @@
 #include "core/cli_options.h"
+#include "core/input_state.h"
 #include "core/math.h"
 #include "core/object_id.h"
 #include "core/settings.h"
@@ -260,5 +261,30 @@ void runTestCore()
         assert(camera->transform().rotation.y == 0.0f);
         assert(camera->transform().rotation.z == 0.0f);
         assert(camera->moveSpeed() == 5.0f);
+    }
+
+    // View-matrix basis extraction matches the lookAt row layout.
+    {
+        Scene scene;
+        Camera* camera = scene.createCamera({0.0f, 0.0f, 0.0f});
+        camera->transform().rotation = {0.0f, 90.0f * kDegToRad, 0.0f};
+        camera->update(0.0f, InputState{});
+
+        Mat4 view = camera->viewMatrix();
+        Vec3 right = cameraRightFromView(view);
+        Vec3 up = cameraUpFromView(view);
+        Vec3 backward = cameraBackwardFromView(view);
+
+        assert(std::fabs(right.x) < 1e-4f);
+        assert(std::fabs(right.y) < 1e-4f);
+        assert(std::fabs(right.z - 1.0f) < 1e-4f);
+
+        assert(std::fabs(up.x) < 1e-4f);
+        assert(std::fabs(up.y - 1.0f) < 1e-4f);
+        assert(std::fabs(up.z) < 1e-4f);
+
+        assert(std::fabs(backward.x + 1.0f) < 1e-4f);
+        assert(std::fabs(backward.y) < 1e-4f);
+        assert(std::fabs(backward.z) < 1e-4f);
     }
 }

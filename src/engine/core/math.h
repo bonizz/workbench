@@ -40,6 +40,13 @@ Mat3 normalMatrix(const Mat4& m);
 // Named inverseMatrix to avoid ADL conflict with simd::inverse on Mat4.
 Mat4 inverseMatrix(const Mat4& m);
 
+// Extract the camera basis vectors from a view matrix produced by lookAt().
+// lookAt stores right/up/backward as the rows of the upper-left 3x3, not as
+// the columns, so these helpers are the canonical way to read them.
+Vec3 cameraRightFromView(const Mat4& view);
+Vec3 cameraUpFromView(const Mat4& view);
+Vec3 cameraBackwardFromView(const Mat4& view);
+
 // Transform a point by a 4x4 matrix (w=1, perspective divide).
 Vec3 transformPoint(const Mat4& m, const Vec3& p);
 
