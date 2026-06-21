@@ -98,6 +98,14 @@ project "tests"
 
     files {
         "src/tests/main.cpp",
+        "src/tests/test_core.cpp",
+        "src/tests/test_scene.cpp",
+        "src/tests/test_agent.cpp",
+        "src/tests/test_renderer.cpp",
+        "src/tests/test_serialization.cpp",
+        "src/tests/test_picking.cpp",
+        "src/tests/test_debug.cpp",
+        "src/tests/test_test_suite.cpp",
         "src/engine/agent/command.cpp",
         "src/engine/agent/command.h",
         "src/engine/agent/script_runner.cpp",
