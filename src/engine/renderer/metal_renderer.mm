@@ -248,10 +248,10 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
         impl_->groundVertexBuffer = [impl_->device newBufferWithLength:len options:MTLResourceStorageModeShared];
         Vertex* v = static_cast<Vertex*>([impl_->groundVertexBuffer contents]);
         float sz = 50.0f;
-        v[0] = {{-sz, 0.0f, -sz}, {0, 0, 0, 0}};
-        v[1] = {{ sz, 0.0f, -sz}, {0, 0, 0, 0}};
-        v[2] = {{ sz, 0.0f,  sz}, {0, 0, 0, 0}};
-        v[3] = {{-sz, 0.0f,  sz}, {0, 0, 0, 0}};
+        v[0] = {{-sz, 0.0f, -sz}, {0.0f, 1.0f, 0.0f}};
+        v[1] = {{ sz, 0.0f, -sz}, {0.0f, 1.0f, 0.0f}};
+        v[2] = {{ sz, 0.0f,  sz}, {0.0f, 1.0f, 0.0f}};
+        v[3] = {{-sz, 0.0f,  sz}, {0.0f, 1.0f, 0.0f}};
     }
 
     if (!impl_->groundIndexBuffer) {
@@ -317,11 +317,13 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
                 [sceneEncoder setRenderPipelineState:impl_->meshPipeline];
                 [sceneEncoder setVertexBuffer:vbuf offset:0
                     atIndex:static_cast<NSUInteger>(VertexBufferIndex::Vertices)];
-                ShaderUniforms uniforms = {cmd.transform, view, projection};
+                ShaderUniforms uniforms = {cmd.transform, view, projection, normalMatrix(cmd.transform)};
                 [sceneEncoder setVertexBytes:&uniforms length:sizeof(uniforms)
                     atIndex:static_cast<NSUInteger>(VertexBufferIndex::Uniforms)];
                 [sceneEncoder setFragmentBytes:&cmd.color length:sizeof(cmd.color)
                     atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Color)];
+                [sceneEncoder setFragmentBytes:&rc.light() length:sizeof(rc.light())
+                    atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Light)];
                 [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                     indexCount:indexCount indexType:MTLIndexTypeUInt16
                     indexBuffer:ibuf indexBufferOffset:0];

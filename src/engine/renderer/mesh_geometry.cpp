@@ -9,9 +9,9 @@ namespace {
 constexpr int kSphereSlices = 16;
 constexpr int kSphereStacks = 12;
 
-Vertex whiteVertex(const Vec3& pos)
+Vertex litVertex(const Vec3& pos, const Vec3& normal)
 {
-    return Vertex{{pos.x, pos.y, pos.z}, {1.0f, 1.0f, 1.0f, 1.0f}};
+    return Vertex{{pos.x, pos.y, pos.z}, {normal.x, normal.y, normal.z}};
 }
 
 } // namespace
@@ -19,35 +19,56 @@ Vertex whiteVertex(const Vec3& pos)
 MeshData makeCube()
 {
     MeshData data;
-    data.vertices.reserve(8);
+    data.vertices.reserve(24);
     data.indices.reserve(36);
 
-    static const Vec3 positions[8] = {
-        {-1.0f, -1.0f, -1.0f},
-        { 1.0f, -1.0f, -1.0f},
-        { 1.0f,  1.0f, -1.0f},
-        {-1.0f,  1.0f, -1.0f},
-        {-1.0f, -1.0f,  1.0f},
-        { 1.0f, -1.0f,  1.0f},
-        { 1.0f,  1.0f,  1.0f},
-        {-1.0f,  1.0f,  1.0f},
-    };
+    // Each face has 4 unique vertices so face normals are constant across the face.
+    // Winding is CCW when viewed from outside the cube.
 
-    for (const auto& p : positions) {
-        data.vertices.push_back(whiteVertex(p));
-    }
+    // +X face (normal +X)
+    data.vertices.push_back(litVertex({ 1, -1, -1}, { 1,  0,  0}));
+    data.vertices.push_back(litVertex({ 1,  1, -1}, { 1,  0,  0}));
+    data.vertices.push_back(litVertex({ 1,  1,  1}, { 1,  0,  0}));
+    data.vertices.push_back(litVertex({ 1, -1,  1}, { 1,  0,  0}));
 
-    static const uint16_t indices[36] = {
-        0, 1, 2,   0, 2, 3,
-        4, 6, 5,   4, 7, 6,
-        3, 2, 6,   3, 6, 7,
-        0, 4, 5,   0, 5, 1,
-        1, 5, 6,   1, 6, 2,
-        0, 3, 7,   0, 7, 4
-    };
+    // -X face (normal -X)
+    data.vertices.push_back(litVertex({-1, -1,  1}, {-1,  0,  0}));
+    data.vertices.push_back(litVertex({-1,  1,  1}, {-1,  0,  0}));
+    data.vertices.push_back(litVertex({-1,  1, -1}, {-1,  0,  0}));
+    data.vertices.push_back(litVertex({-1, -1, -1}, {-1,  0,  0}));
 
-    for (uint16_t i : indices) {
-        data.indices.push_back(i);
+    // +Y face (normal +Y)
+    data.vertices.push_back(litVertex({-1,  1, -1}, { 0,  1,  0}));
+    data.vertices.push_back(litVertex({-1,  1,  1}, { 0,  1,  0}));
+    data.vertices.push_back(litVertex({ 1,  1,  1}, { 0,  1,  0}));
+    data.vertices.push_back(litVertex({ 1,  1, -1}, { 0,  1,  0}));
+
+    // -Y face (normal -Y)
+    data.vertices.push_back(litVertex({-1, -1,  1}, { 0, -1,  0}));
+    data.vertices.push_back(litVertex({-1, -1, -1}, { 0, -1,  0}));
+    data.vertices.push_back(litVertex({ 1, -1, -1}, { 0, -1,  0}));
+    data.vertices.push_back(litVertex({ 1, -1,  1}, { 0, -1,  0}));
+
+    // +Z face (normal +Z)
+    data.vertices.push_back(litVertex({-1, -1,  1}, { 0,  0,  1}));
+    data.vertices.push_back(litVertex({ 1, -1,  1}, { 0,  0,  1}));
+    data.vertices.push_back(litVertex({ 1,  1,  1}, { 0,  0,  1}));
+    data.vertices.push_back(litVertex({-1,  1,  1}, { 0,  0,  1}));
+
+    // -Z face (normal -Z)
+    data.vertices.push_back(litVertex({ 1, -1, -1}, { 0,  0, -1}));
+    data.vertices.push_back(litVertex({-1, -1, -1}, { 0,  0, -1}));
+    data.vertices.push_back(litVertex({-1,  1, -1}, { 0,  0, -1}));
+    data.vertices.push_back(litVertex({ 1,  1, -1}, { 0,  0, -1}));
+
+    for (int face = 0; face < 6; ++face) {
+        uint16_t base = static_cast<uint16_t>(face * 4);
+        data.indices.push_back(base + 0);
+        data.indices.push_back(base + 2);
+        data.indices.push_back(base + 1);
+        data.indices.push_back(base + 0);
+        data.indices.push_back(base + 3);
+        data.indices.push_back(base + 2);
     }
 
     return data;
@@ -74,7 +95,7 @@ MeshData makeSphere()
                 cosTheta,
                 sinTheta * sinPhi
             };
-            data.vertices.push_back(whiteVertex(pos));
+            data.vertices.push_back(litVertex(pos, normalize(pos)));
         }
     }
 
@@ -104,10 +125,11 @@ MeshData makePlane()
     data.vertices.reserve(4);
     data.indices.reserve(6);
 
-    data.vertices.push_back(whiteVertex({-1.0f, 0.0f, -1.0f}));
-    data.vertices.push_back(whiteVertex({ 1.0f, 0.0f, -1.0f}));
-    data.vertices.push_back(whiteVertex({ 1.0f, 0.0f,  1.0f}));
-    data.vertices.push_back(whiteVertex({-1.0f, 0.0f,  1.0f}));
+    const Vec3 up = {0.0f, 1.0f, 0.0f};
+    data.vertices.push_back(litVertex({-1.0f, 0.0f, -1.0f}, up));
+    data.vertices.push_back(litVertex({ 1.0f, 0.0f, -1.0f}, up));
+    data.vertices.push_back(litVertex({ 1.0f, 0.0f,  1.0f}, up));
+    data.vertices.push_back(litVertex({-1.0f, 0.0f,  1.0f}, up));
 
     // Winding is CCW when viewed from +Y. Culling is currently disabled, so the
     // single-sided quad is visible from below as well.

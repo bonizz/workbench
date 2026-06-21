@@ -4,7 +4,7 @@ using namespace metal;
 struct Vertex
 {
     packed_float3 position;
-    packed_float4 color;
+    packed_float3 normal;
 };
 
 struct Uniforms
@@ -12,12 +12,20 @@ struct Uniforms
     float4x4 modelMatrix;
     float4x4 viewMatrix;
     float4x4 projectionMatrix;
+    float3x3 normalMatrix;
 };
 
 struct VertexOut
 {
     float4 position [[position]];
-    float4 color;
+    float3 worldNormal;
+};
+
+struct LightSettings
+{
+    float3 direction;
+    float ambient;
+    float diffuse;
 };
 
 vertex VertexOut vertex_main(const device Vertex* vertices [[buffer(0)]],
@@ -31,13 +39,18 @@ vertex VertexOut vertex_main(const device Vertex* vertices [[buffer(0)]],
 
     VertexOut out;
     out.position = uniforms.projectionMatrix * viewPosition;
-    out.color = in.color;
+    out.worldNormal = uniforms.normalMatrix * float3(in.normal);
 
     return out;
 }
 
 fragment float4 fragment_main(VertexOut in [[stage_in]],
-                              constant float4& uColor [[buffer(0)]])
+                              constant float4& uColor [[buffer(0)]],
+                              constant LightSettings& light [[buffer(1)]])
 {
-    return uColor;
+    float3 n = normalize(in.worldNormal);
+    float3 l = normalize(light.direction);
+    float lambert = max(dot(n, l), 0.0f);
+    float lit = light.ambient + light.diffuse * lambert;
+    return float4(uColor.rgb * lit, uColor.a);
 }

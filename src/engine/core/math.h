@@ -11,6 +11,7 @@ struct Vec3
 };
 
 using Mat4 = simd::float4x4;
+using Mat3 = simd::float3x3;
 
 constexpr float kPi = 3.14159265f;
 constexpr float kDegToRad = kPi / 180.0f;
@@ -30,6 +31,10 @@ Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up);
 Vec3 normalize(Vec3 v);
 Vec3 cross(Vec3 a, Vec3 b);
 float dot(Vec3 a, Vec3 b);
+
+// Inverse-transpose of the upper 3x3 of a 4x4 matrix, for transforming normals.
+// Required for correct lighting under non-uniform scale.
+Mat3 normalMatrix(const Mat4& m);
 
 inline Vec3 toDegrees(const Vec3& radians)
 {

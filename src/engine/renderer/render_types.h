@@ -4,25 +4,26 @@
 #include <cstdint>
 
 // CPU-side vertex layout. Must match the Metal shader:
-//   struct Vertex { packed_float3 position; packed_float4 color; };
+//   struct Vertex { packed_float3 position; packed_float3 normal; };
 struct Vertex
 {
     float position[3];
-    float color[4];
+    float normal[3];
 };
 
-static_assert(sizeof(Vertex) == 28, "Vertex size mismatch");
+static_assert(sizeof(Vertex) == 24, "Vertex size mismatch");
 static_assert(alignof(Vertex) == 4, "Vertex alignment mismatch");
 
-// Must match the Metal shader Uniforms struct (float4x4 x 3).
+// Must match the Metal shader Uniforms struct.
 struct alignas(16) ShaderUniforms
 {
     simd::float4x4 modelMatrix;
     simd::float4x4 viewMatrix;
     simd::float4x4 projectionMatrix;
+    simd::float3x3 normalMatrix;
 };
 
-static_assert(sizeof(ShaderUniforms) == 192, "ShaderUniforms size mismatch");
+static_assert(sizeof(ShaderUniforms) == 240, "ShaderUniforms size mismatch");
 
 enum class VertexBufferIndex : uint32_t
 {
@@ -40,4 +41,15 @@ enum class FragmentBufferIndex : uint32_t
 enum class MeshFragmentBufferIndex : uint32_t
 {
     Color = 0,
+    Light = 1,
 };
+
+// Global directional light settings. Must match the Metal shader LightSettings struct.
+struct alignas(16) LightSettings
+{
+    simd::float3 direction = {0.0f, -1.0f, 0.0f};
+    float ambient = 0.3f;
+    float diffuse = 0.7f;
+};
+
+static_assert(sizeof(LightSettings) == 32, "LightSettings size mismatch");

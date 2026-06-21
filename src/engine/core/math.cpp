@@ -120,3 +120,9 @@ Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up)
         simd::float4{-dot(s, eye), -dot(u, eye), -dot(f, eye), 1}
     };
 }
+
+Mat3 normalMatrix(const Mat4& m)
+{
+    Mat3 linear{m.columns[0].xyz, m.columns[1].xyz, m.columns[2].xyz};
+    return simd::transpose(simd::inverse(linear));
+}

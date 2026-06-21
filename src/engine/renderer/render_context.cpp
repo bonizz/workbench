@@ -6,6 +6,14 @@ void RenderContext::setCamera(const Mat4& view, const Mat4& projection)
     projection_ = projection;
 }
 
+void RenderContext::setLight(const Vec3& direction, float ambient, float diffuse)
+{
+    Vec3 n = normalize(direction);
+    light_.direction = {n.x, n.y, n.z};
+    light_.ambient = ambient;
+    light_.diffuse = diffuse;
+}
+
 void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color)
 {
     RenderCommand cmd;

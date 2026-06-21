@@ -1145,18 +1145,38 @@ int main()
 
     // ===== Milestone 0.7: Primitive Mesh Library =====
 
-    // Mesh geometry generation: counts, bounds, and index validity.
+    // Mesh geometry generation: counts, bounds, index validity, and normals.
     {
         MeshData cube = makeCube();
-        assert(cube.vertices.size() == 8);
+        assert(cube.vertices.size() == 24);
         assert(cube.indices.size() == 36);
         for (const auto& v : cube.vertices) {
             assert(v.position[0] >= -1.0f && v.position[0] <= 1.0f);
             assert(v.position[1] >= -1.0f && v.position[1] <= 1.0f);
             assert(v.position[2] >= -1.0f && v.position[2] <= 1.0f);
+
+            float nx = v.normal[0];
+            float ny = v.normal[1];
+            float nz = v.normal[2];
+            float nLen = std::sqrt(nx * nx + ny * ny + nz * nz);
+            assert(std::fabs(nLen - 1.0f) < 1e-4f);
+
+            // Cube face normals are axis-aligned.
+            assert((std::fabs(nx) == 1.0f && ny == 0.0f && nz == 0.0f) ||
+                   (nx == 0.0f && std::fabs(ny) == 1.0f && nz == 0.0f) ||
+                   (nx == 0.0f && ny == 0.0f && std::fabs(nz) == 1.0f));
         }
         for (uint16_t idx : cube.indices) {
             assert(idx < cube.vertices.size());
+        }
+        // Each face's 4 vertices share the same normal.
+        for (int face = 0; face < 6; ++face) {
+            size_t base = face * 4;
+            for (size_t i = 1; i < 4; ++i) {
+                assert(cube.vertices[base + i].normal[0] == cube.vertices[base].normal[0]);
+                assert(cube.vertices[base + i].normal[1] == cube.vertices[base].normal[1]);
+                assert(cube.vertices[base + i].normal[2] == cube.vertices[base].normal[2]);
+            }
         }
 
         MeshData sphere = makeSphere();
@@ -1173,6 +1193,15 @@ int main()
             assert(z >= -1.0f && z <= 1.0f);
             float len = std::sqrt(x * x + y * y + z * z);
             assert(std::fabs(len - 1.0f) < 1e-4f);
+
+            float nx = v.normal[0];
+            float ny = v.normal[1];
+            float nz = v.normal[2];
+            float nLen = std::sqrt(nx * nx + ny * ny + nz * nz);
+            assert(std::fabs(nLen - 1.0f) < 1e-4f);
+            assert(std::fabs(nx - x) < 1e-4f);
+            assert(std::fabs(ny - y) < 1e-4f);
+            assert(std::fabs(nz - z) < 1e-4f);
         }
         for (uint16_t idx : sphere.indices) {
             assert(idx < sphere.vertices.size());
@@ -1185,10 +1214,57 @@ int main()
             assert(v.position[0] >= -1.0f && v.position[0] <= 1.0f);
             assert(v.position[2] >= -1.0f && v.position[2] <= 1.0f);
             assert(v.position[1] == 0.0f);
+
+            assert(v.normal[0] == 0.0f);
+            assert(v.normal[1] == 1.0f);
+            assert(v.normal[2] == 0.0f);
         }
         for (uint16_t idx : plane.indices) {
             assert(idx < plane.vertices.size());
         }
+    }
+
+    // Vertex layout for lighting.
+    {
+        assert(sizeof(Vertex) == 24);
+        assert(alignof(Vertex) == 4);
+    }
+
+    // Normal matrix: rotation + uniform scale.
+    {
+        Mat4 m = multiply(rotationY(kPi / 2.0f), scale(2.0f, 2.0f, 2.0f));
+        Mat3 nm = normalMatrix(m);
+
+        Vec3 localN = {1.0f, 0.0f, 0.0f};
+        simd::float3 worldN = nm * simd::float3{localN.x, localN.y, localN.z};
+        worldN = simd::normalize(worldN);
+
+        // A +X normal under a 90-degree Y rotation points +Z.
+        assert(std::fabs(worldN.x) < 1e-4f);
+        assert(std::fabs(worldN.y) < 1e-4f);
+        assert(std::fabs(worldN.z - 1.0f) < 1e-4f);
+    }
+
+    // Normal matrix: non-uniform scale.
+    {
+        Mat4 m = scale(2.0f, 1.0f, 0.5f);
+        Mat3 nm = normalMatrix(m);
+
+        // A face normal in +X direction. Under non-uniform scale the normal
+        // must remain perpendicular to the scaled tangent in world space.
+        Vec3 localN = {1.0f, 0.0f, 0.0f};
+        simd::float3 worldN = nm * simd::float3{localN.x, localN.y, localN.z};
+        worldN = simd::normalize(worldN);
+
+        // Tangent along +Z on the +X face; in world space it is stretched by 0.5x.
+        Vec3 localT = {0.0f, 0.0f, 1.0f};
+        simd::float3 worldT = m.columns[2].xyz;
+
+        float perpendicular = simd::dot(worldN, worldT);
+        assert(std::fabs(perpendicular) < 1e-4f);
+        assert(std::fabs(worldN.x - 1.0f) < 1e-4f);
+        assert(std::fabs(worldN.y) < 1e-4f);
+        assert(std::fabs(worldN.z) < 1e-4f);
     }
 
     // Mesh shape string mapping.
