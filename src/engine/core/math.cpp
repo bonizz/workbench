@@ -132,17 +132,17 @@ Mat4 inverseMatrix(const Mat4& m)
     return simd::inverse(m);
 }
 
-Vec3 cameraRightFromView(const Mat4& view)
+Vec3 viewRight(const Mat4& view)
 {
     return {view.columns[0].x, view.columns[1].x, view.columns[2].x};
 }
 
-Vec3 cameraUpFromView(const Mat4& view)
+Vec3 viewUp(const Mat4& view)
 {
     return {view.columns[0].y, view.columns[1].y, view.columns[2].y};
 }
 
-Vec3 cameraBackwardFromView(const Mat4& view)
+Vec3 viewBackward(const Mat4& view)
 {
     return {view.columns[0].z, view.columns[1].z, view.columns[2].z};
 }

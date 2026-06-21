@@ -271,9 +271,9 @@ void runTestCore()
         camera->update(0.0f, InputState{});
 
         Mat4 view = camera->viewMatrix();
-        Vec3 right = cameraRightFromView(view);
-        Vec3 up = cameraUpFromView(view);
-        Vec3 backward = cameraBackwardFromView(view);
+        Vec3 right = viewRight(view);
+        Vec3 up = viewUp(view);
+        Vec3 backward = viewBackward(view);
 
         assert(std::fabs(right.x) < 1e-4f);
         assert(std::fabs(right.y) < 1e-4f);

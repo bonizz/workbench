@@ -18,9 +18,9 @@ Ray makeCameraRay(const Vec3& cameraPosition,
 {
     // lookAt stores the orthonormal basis as the rows of the upper 3x3.
     // Use the canonical helpers so the extraction is not open-coded.
-    Vec3 right = cameraRightFromView(viewMatrix);
-    Vec3 up = cameraUpFromView(viewMatrix);
-    Vec3 backward = cameraBackwardFromView(viewMatrix);
+    Vec3 right = viewRight(viewMatrix);
+    Vec3 up = viewUp(viewMatrix);
+    Vec3 backward = viewBackward(viewMatrix);
 
     float tanHalfFov = std::tan(fovY * 0.5f);
     float halfH = tanHalfFov;        // near-plane distance cancels in normalization
