@@ -89,10 +89,5 @@ For validation, prefer this order:
 
 Do not automatically capture screenshots or analyze rendered images.
 
-Only use screenshot capture or inspection when:
-
-* explicitly requested by the user, or
-* no other reasonable validation path exists.
-
-A screenshot should be considered a final smoke test, not a routine validation
-step.
+Only use screenshot capture or inspection when explicitly requested by the user.
+Even final smoke tests should not use screenshots unless the user asks for one.
