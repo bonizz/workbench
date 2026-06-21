@@ -2,6 +2,7 @@
 #include "agent/command.h"
 #include "agent/test_suite.h"
 #include "core/math.h"
+#include "core/picking.h"
 #include "core/settings.h"
 #include "platform/window.h"
 #include "renderer/metal_renderer.h"
@@ -353,4 +354,33 @@ void Application::onScroll(float delta)
     }
 
     scrollDelta_ += delta;
+}
+
+void Application::onMouseButton(int button, bool down, float x, float y)
+{
+    if (button != 0 || !down) {
+        return;
+    }
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
+    float width = window_->width();
+    float height = window_->height();
+    if (width <= 0.0f || height <= 0.0f) {
+        return;
+    }
+
+    float ndcX = (x / width) * 2.0f - 1.0f;
+    float ndcY = (y / height) * 2.0f - 1.0f;
+
+    Ray ray = makeCameraRay(scene_->camera().transform().position,
+                            scene_->camera().viewMatrix(),
+                            renderer_->aspectRatio(),
+                            60.0f * kDegToRad,
+                            ndcX,
+                            ndcY);
+
+    GameObject* hit = scene_->pickObject(ray.origin, ray.direction);
+    editor_->setSelected(hit);
 }

@@ -57,6 +57,7 @@ public:
     void onKeyEvent(int keyCode, bool down);
     void onMouseDrag(float deltaX, float deltaY);
     void onScroll(float delta);
+    void onMouseButton(int button, bool down, float x, float y);
 
 private:
     void recreateScene();

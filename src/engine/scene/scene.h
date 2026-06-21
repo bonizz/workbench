@@ -46,6 +46,11 @@ public:
     // transforms first so editor direct-edits are reflected immediately.
     void buildRenderCommands(RenderContext& ctx);
 
+    // Returns the nearest active MeshRenderer object hit by the world-space ray,
+    // or nullptr. The camera and inactive objects are never pickable. World
+    // transforms are refreshed first.
+    GameObject* pickObject(const Vec3& rayOrigin, const Vec3& rayDir);
+
     // Cascades: deletes the object and its entire subtree from objects_.
     bool deleteObject(GameObject* obj);
 

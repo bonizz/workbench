@@ -1,9 +1,12 @@
 #include "scene/scene.h"
 
+#include "core/picking.h"
 #include "renderer/render_command.h"
 #include "scene/mesh_renderer.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 using scene::MeshRenderer;
 
@@ -146,6 +149,67 @@ void Scene::buildRenderCommands(RenderContext& ctx)
             ctx.drawShape(toRenderShape(mesh->shape), obj->transform().worldMatrix(), mesh->color);
         }
     }
+}
+
+GameObject* Scene::pickObject(const Vec3& rayOrigin, const Vec3& rayDir)
+{
+    updateWorldTransforms();
+
+    GameObject* best = nullptr;
+    float bestDist = std::numeric_limits<float>::infinity();
+
+    for (const auto& obj : objects_) {
+        if (!obj->active() || isCamera(obj.get())) {
+            continue;
+        }
+        MeshRenderer* mesh = obj->getComponent<MeshRenderer>();
+        if (!mesh) {
+            continue;
+        }
+
+        const Mat4& world = obj->transform().worldMatrix();
+        Mat4 invWorld = inverseMatrix(world);
+        Vec3 localOrigin = transformPoint(invWorld, rayOrigin);
+        Vec3 localDir = transformVector(invWorld, rayDir);
+        float len = std::sqrt(dot(localDir, localDir));
+        if (len < 1e-6f) {
+            continue;
+        }
+        localDir = {localDir.x / len, localDir.y / len, localDir.z / len};
+
+        float localT = 0.0f;
+        bool hit = false;
+        switch (mesh->shape) {
+            case scene::MeshShape::Cube:
+                hit = intersectRayAABB(localOrigin, localDir, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, localT);
+                break;
+            case scene::MeshShape::Sphere:
+                hit = intersectRaySphere(localOrigin, localDir, 1.0f, localT);
+                break;
+            case scene::MeshShape::Plane:
+                hit = intersectRayPlane(localOrigin, localDir, localT);
+                break;
+        }
+        if (!hit) {
+            continue;
+        }
+
+        Vec3 localHit = {
+            localOrigin.x + localDir.x * localT,
+            localOrigin.y + localDir.y * localT,
+            localOrigin.z + localDir.z * localT
+        };
+        Vec3 worldHit = transformPoint(world, localHit);
+        Vec3 diff = {worldHit.x - rayOrigin.x, worldHit.y - rayOrigin.y, worldHit.z - rayOrigin.z};
+        float dist = std::sqrt(dot(diff, diff));
+
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = obj.get();
+        }
+    }
+
+    return best;
 }
 
 bool Scene::deleteObject(GameObject* obj)

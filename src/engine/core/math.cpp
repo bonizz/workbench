@@ -126,3 +126,20 @@ Mat3 normalMatrix(const Mat4& m)
     Mat3 linear{m.columns[0].xyz, m.columns[1].xyz, m.columns[2].xyz};
     return simd::transpose(simd::inverse(linear));
 }
+
+Mat4 inverseMatrix(const Mat4& m)
+{
+    return simd::inverse(m);
+}
+
+Vec3 transformPoint(const Mat4& m, const Vec3& p)
+{
+    simd::float4 r = m * simd::float4{p.x, p.y, p.z, 1.0f};
+    return {r.x / r.w, r.y / r.w, r.z / r.w};
+}
+
+Vec3 transformVector(const Mat4& m, const Vec3& v)
+{
+    simd::float4 r = m * simd::float4{v.x, v.y, v.z, 0.0f};
+    return {r.x, r.y, r.z};
+}

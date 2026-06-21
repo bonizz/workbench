@@ -91,3 +91,15 @@ Do not automatically capture screenshots or analyze rendered images.
 
 Only use screenshot capture or inspection when explicitly requested by the user.
 Even final smoke tests should not use screenshots unless the user asks for one.
+
+Token Efficiency Guidelines
+
+When implementing a milestone:
+
+* Do not read large files fully unless necessary.
+* Prefer targeted search first (e.g., grep/ripgrep for a symbol or command name).
+* For command changes, inspect the command table and nearby related handler only.
+* For tests, inspect nearby tests for the same subsystem only.
+* For prior milestone plans, read the goal/constraints/contracts first, not the whole file.
+* Ask for clarification if a file or subsystem is unclear instead of scanning broadly.
+* Avoid screenshot analysis unless explicitly requested.
