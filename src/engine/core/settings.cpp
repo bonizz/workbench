@@ -177,6 +177,66 @@ void saveCamera(const Vec3& position, const Vec3& rotation, float moveSpeed)
     saveJson(j);
 }
 
+bool loadLighting(LightSettings& light, SkySettings& sky)
+{
+    json j = loadJson();
+    if (!j.contains("lighting")) {
+        return false;
+    }
+
+    json l = j["lighting"];
+    try {
+        if (l.contains("light")) {
+            json lt = l["light"];
+            light.direction = {lt["direction"][0].get<float>(),
+                               lt["direction"][1].get<float>(),
+                               lt["direction"][2].get<float>()};
+            light.ambient = lt["ambient"].get<float>();
+            light.diffuse = lt["diffuse"].get<float>();
+        }
+        if (l.contains("sky")) {
+            json sk = l["sky"];
+            sky.horizonColor = {sk["horizonColor"][0].get<float>(),
+                                sk["horizonColor"][1].get<float>(),
+                                sk["horizonColor"][2].get<float>()};
+            sky.zenithColor = {sk["zenithColor"][0].get<float>(),
+                               sk["zenithColor"][1].get<float>(),
+                               sk["zenithColor"][2].get<float>()};
+            sky.sunColor = {sk["sunColor"][0].get<float>(),
+                            sk["sunColor"][1].get<float>(),
+                            sk["sunColor"][2].get<float>()};
+            sky.sunSize = sk["sunSize"].get<float>();
+            sky.sunIntensity = sk["sunIntensity"].get<float>();
+        }
+    } catch (...) {
+        return false;
+    }
+
+    return true;
+}
+
+void saveLighting(const LightSettings& light, const SkySettings& sky)
+{
+    json j = loadJson();
+
+    json l = json::object();
+    l["light"] = {
+        {"direction", {light.direction.x, light.direction.y, light.direction.z}},
+        {"ambient", light.ambient},
+        {"diffuse", light.diffuse},
+    };
+    l["sky"] = {
+        {"horizonColor", {sky.horizonColor.x, sky.horizonColor.y, sky.horizonColor.z}},
+        {"zenithColor", {sky.zenithColor.x, sky.zenithColor.y, sky.zenithColor.z}},
+        {"sunColor", {sky.sunColor.x, sky.sunColor.y, sky.sunColor.z}},
+        {"sunSize", sky.sunSize},
+        {"sunIntensity", sky.sunIntensity},
+    };
+
+    j["lighting"] = l;
+    saveJson(j);
+}
+
 void setSettingsPath(const std::string& path)
 {
     gSettingsPath = path;

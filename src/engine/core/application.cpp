@@ -70,6 +70,9 @@ bool Application::init()
     lightSettings_.ambient = 0.15f;
     lightSettings_.diffuse = 1.0f;
 
+    // Restore saved light/sky tweaks, falling back to the defaults above.
+    Settings::loadLighting(lightSettings_, skySettings_);
+
     scene_ = std::make_unique<Scene>();
     scene_->createCamera({0.0f, 3.0f, 5.0f});
     scene_->camera().setActive(false);
@@ -132,6 +135,7 @@ void Application::saveSettings()
         editor_->saveSettings();
         editor_->saveLayout();
     }
+    Settings::saveLighting(lightSettings_, skySettings_);
     if (liveSimulation_ && scene_) {
         const Camera& cam = scene_->camera();
         Settings::saveCamera(cam.transform().position, cam.transform().rotation, cam.moveSpeed());

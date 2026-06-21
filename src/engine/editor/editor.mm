@@ -391,11 +391,13 @@ void Editor::drawLightingPanel()
     ImGui::SetNextWindowSize(ImVec2(360, 320), ImGuiCond_FirstUseEver);
     ImGui::Begin("Lighting", &showLighting_);
 
+    // Store the raw direction; normalization happens where it's consumed
+    // (RenderContext::setLight and the sky shader). Normalizing here would
+    // rescale all three components on every edit, so dragging one field would
+    // visibly move the others.
     float dir[3] = {lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z};
     if (ImGui::DragFloat3("Direction", dir, 0.01f)) {
-        Vec3 v = {dir[0], dir[1], dir[2]};
-        v = normalize(v);
-        lightSettings_->direction = {v.x, v.y, v.z};
+        lightSettings_->direction = {dir[0], dir[1], dir[2]};
     }
 
     Vec3 n = normalize({lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z});

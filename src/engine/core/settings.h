@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/math.h"
+#include "renderer/render_types.h"
 
 #include <string>
 #include <unordered_map>
@@ -32,6 +33,13 @@ bool loadCamera(Vec3& position, Vec3& rotation, float& moveSpeed);
 
 // Save the current camera state.
 void saveCamera(const Vec3& position, const Vec3& rotation, float moveSpeed);
+
+// Load the saved directional-light and procedural-sky settings. Returns false
+// if none are saved, in which case the out parameters are left unchanged.
+bool loadLighting(LightSettings& light, SkySettings& sky);
+
+// Save the current directional-light and procedural-sky settings.
+void saveLighting(const LightSettings& light, const SkySettings& sky);
 
 // Override the settings file path. Used by tests to avoid touching the real
 // settings.txt in the project root.
