@@ -84,6 +84,13 @@ void Editor::endFrame()
     ImGui::Render();
 }
 
+void Editor::saveLayout()
+{
+    if (ImGui::GetCurrentContext()) {
+        ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
+    }
+}
+
 void Editor::render(void* commandBuffer, void* renderEncoder, void* renderPassDescriptor)
 {
     ImGui_ImplMetal_NewFrame((MTLRenderPassDescriptor*)renderPassDescriptor);

@@ -53,6 +53,9 @@ public:
     // alive (e.g. from the platform close handler).
     void saveSettings() { saveWindowStates(); }
 
+    // Persist current ImGui layout (panel positions / sizes).
+    void saveLayout();
+
 private:
     bool initialized_ = false;
     bool showHierarchy_ = true;

@@ -115,6 +115,7 @@ void Application::saveSettings()
     }
     if (editor_) {
         editor_->saveSettings();
+        editor_->saveLayout();
     }
 }
 
