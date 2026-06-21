@@ -5,6 +5,7 @@
 #include "core/cli_options.h"
 #include "core/math.h"
 #include "core/object_id.h"
+#include "core/settings.h"
 #include "debug/bundle.h"
 #include "debug/debug_state.h"
 #include "renderer/mesh_geometry.h"
@@ -789,6 +790,75 @@ int main()
         CliOptions opts = parseCliOptions(4, args);
         assert(opts.runScript.empty());
         assert(opts.bundleName == "name");
+    }
+
+    // Settings: window size round-trip.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.txt"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_settings.txt";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        Settings::saveWindowSize(1024, 768);
+
+        int width = 0;
+        int height = 0;
+        assert(Settings::loadWindowSize(width, height));
+        assert(width == 1024);
+        assert(height == 768);
+    }
+
+    // Settings: editor window state round-trip and preservation.
+    {
+        struct SettingsPathGuard {
+            std::string previous;
+            std::string path;
+            SettingsPathGuard(const std::string& p) : previous("settings.txt"), path(p) {
+                Settings::setSettingsPath(p);
+            }
+            ~SettingsPathGuard() {
+                Settings::setSettingsPath(previous);
+                std::filesystem::remove(path);
+            }
+        };
+
+        const char* path = "build/tests/test_editor_settings.txt";
+        SettingsPathGuard guard(path);
+        (void)guard;
+
+        Settings::saveWindowSize(800, 600);
+        Settings::saveEditorWindowStates({{"Hierarchy", true}, {"Inspector", false}, {"AgentConsole", true}});
+
+        int width = 0;
+        int height = 0;
+        assert(Settings::loadWindowSize(width, height));
+        assert(width == 800);
+        assert(height == 600);
+
+        std::unordered_map<std::string, bool> states;
+        assert(Settings::loadEditorWindowStates(states));
+        assert(states.size() == 3);
+        assert(states["Hierarchy"] == true);
+        assert(states["Inspector"] == false);
+        assert(states["AgentConsole"] == true);
+
+        // Updating the window size must keep the editor state keys.
+        Settings::saveWindowSize(1280, 720);
+        states.clear();
+        assert(Settings::loadEditorWindowStates(states));
+        assert(states.size() == 3);
+        assert(states["Hierarchy"] == true);
     }
 
     // Component lifecycle: onStart once, onUpdate each step.

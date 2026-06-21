@@ -111,6 +111,8 @@ project "tests"
         "src/engine/core/math.cpp",
         "src/engine/core/math.h",
         "src/engine/core/object_id.h",
+        "src/engine/core/settings.cpp",
+        "src/engine/core/settings.h",
         "src/engine/core/time.cpp",
         "src/engine/core/time.h",
         "src/engine/debug/bundle.cpp",

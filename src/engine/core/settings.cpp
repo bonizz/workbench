@@ -4,13 +4,14 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 
 namespace Settings {
 
 namespace {
 
-constexpr const char* kSettingsPath = "settings.txt";
+std::string gSettingsPath = "settings.txt";
 
 std::string trim(std::string s)
 {
@@ -20,21 +21,35 @@ std::string trim(std::string s)
     return s;
 }
 
-} // namespace
-
-bool loadWindowSize(int& width, int& height)
+std::string toLower(std::string s)
 {
-    if (!std::filesystem::exists(kSettingsPath)) {
-        return false;
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+bool parseBool(const std::string& value)
+{
+    std::string lower = toLower(trim(value));
+    return lower == "true" || lower == "1";
+}
+
+std::string boolToString(bool value)
+{
+    return value ? "true" : "false";
+}
+
+std::map<std::string, std::string> loadAll()
+{
+    std::map<std::string, std::string> values;
+    if (!std::filesystem::exists(gSettingsPath)) {
+        return values;
     }
 
-    std::ifstream file(kSettingsPath);
+    std::ifstream file(gSettingsPath);
     if (!file) {
-        return false;
+        return values;
     }
-
-    bool gotWidth = false;
-    bool gotHeight = false;
 
     std::string line;
     while (std::getline(file, line)) {
@@ -50,18 +65,50 @@ bool loadWindowSize(int& width, int& height)
 
         std::string key = trim(trimmed.substr(0, equals));
         std::string value = trim(trimmed.substr(equals + 1));
-
-        try {
-            if (key == "window_width") {
-                width = std::stoi(value);
-                gotWidth = true;
-            } else if (key == "window_height") {
-                height = std::stoi(value);
-                gotHeight = true;
-            }
-        } catch (...) {
-            // Ignore malformed values.
+        if (!key.empty()) {
+            values[key] = value;
         }
+    }
+
+    return values;
+}
+
+void saveAll(const std::map<std::string, std::string>& values)
+{
+    std::ofstream file(gSettingsPath);
+    if (!file) {
+        return;
+    }
+
+    file << "# Workbench settings\n";
+    for (const auto& [key, value] : values) {
+        file << key << "=" << value << "\n";
+    }
+}
+
+} // namespace
+
+bool loadWindowSize(int& width, int& height)
+{
+    auto values = loadAll();
+
+    bool gotWidth = false;
+    bool gotHeight = false;
+
+    try {
+        auto it = values.find("window_width");
+        if (it != values.end()) {
+            width = std::stoi(it->second);
+            gotWidth = true;
+        }
+
+        it = values.find("window_height");
+        if (it != values.end()) {
+            height = std::stoi(it->second);
+            gotHeight = true;
+        }
+    } catch (...) {
+        // Ignore malformed values.
     }
 
     return gotWidth && gotHeight;
@@ -69,14 +116,57 @@ bool loadWindowSize(int& width, int& height)
 
 void saveWindowSize(int width, int height)
 {
-    std::ofstream file(kSettingsPath);
-    if (!file) {
-        return;
+    auto values = loadAll();
+    values["window_width"] = std::to_string(width);
+    values["window_height"] = std::to_string(height);
+    saveAll(values);
+}
+
+bool loadEditorWindowStates(std::unordered_map<std::string, bool>& states)
+{
+    auto values = loadAll();
+
+    constexpr const char* kPrefix = "show_";
+    constexpr size_t kPrefixLen = 5;
+
+    bool foundAny = false;
+    for (const auto& [key, value] : values) {
+        if (key.compare(0, kPrefixLen, kPrefix) == 0) {
+            std::string name = key.substr(kPrefixLen);
+            if (!name.empty()) {
+                states[name] = parseBool(value);
+                foundAny = true;
+            }
+        }
     }
 
-    file << "# Workbench settings\n";
-    file << "window_width=" << width << "\n";
-    file << "window_height=" << height << "\n";
+    return foundAny;
+}
+
+void saveEditorWindowStates(const std::unordered_map<std::string, bool>& states)
+{
+    auto values = loadAll();
+
+    // Remove any stale show_ entries so panels that no longer exist are cleaned
+    // out and current visibility is rewritten below.
+    for (auto it = values.begin(); it != values.end();) {
+        if (it->first.compare(0, 5, "show_") == 0) {
+            it = values.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (const auto& [name, visible] : states) {
+        values["show_" + name] = boolToString(visible);
+    }
+
+    saveAll(values);
+}
+
+void setSettingsPath(const std::string& path)
+{
+    gSettingsPath = path;
 }
 
 } // namespace Settings

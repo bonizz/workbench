@@ -34,6 +34,7 @@ public:
     void setSelected(GameObject* obj) { selected_ = obj; }
 
 private:
+    void drawMainMenuBar();
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
     void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();
@@ -44,7 +45,18 @@ private:
     void drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
     void drawLightingPanel();
 
+    void loadWindowStates();
+    void saveWindowStates();
+
     bool initialized_ = false;
+    bool showHierarchy_ = true;
+    bool showInspector_ = true;
+    bool showLighting_ = true;
+    bool showDiagnostics_ = true;
+    bool showAgentConsole_ = true;
+    bool showScriptRunner_ = true;
+    bool showScreenshot_ = true;
+    bool showReproBundle_ = true;
     GameObject* selected_ = nullptr;
     MetalRenderer* renderer_ = nullptr;
     LightSettings* lightSettings_ = nullptr;

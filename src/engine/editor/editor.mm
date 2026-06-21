@@ -3,6 +3,7 @@
 #include "agent/script_runner.h"
 #include "capture/capture.h"
 #include "core/math.h"
+#include "core/settings.h"
 #include "debug/debug_state.h"
 #include "renderer/metal_renderer.h"
 #include "scene/mesh_renderer.h"
@@ -45,6 +46,8 @@ bool Editor::init(void* nativeView, void* device)
     if (!ImGui_ImplOSX_Init(view)) return false;
     if (!ImGui_ImplMetal_Init(mtlDevice)) return false;
 
+    loadWindowStates();
+
     initialized_ = true;
     return true;
 }
@@ -52,6 +55,7 @@ bool Editor::init(void* nativeView, void* device)
 void Editor::shutdown()
 {
     if (!initialized_) return;
+    saveWindowStates();
     ImGui_ImplMetal_Shutdown();
     ImGui_ImplOSX_Shutdown();
     ImGui::DestroyContext();
@@ -84,21 +88,72 @@ void Editor::render(void* commandBuffer, void* renderEncoder, void* renderPassDe
 
 void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
 {
-    drawHierarchy(scene, fps, frameTimeMs);
-    drawInspector();
-    drawLightingPanel();
-    drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
-    drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
-    drawScriptRunner(scene);
-    drawScreenshotPanel(scene);
-    drawReproBundlePanel(scene, frame, fps, frameTimeMs, renderCommandCount);
+    drawMainMenuBar();
+
+    if (showHierarchy_) {
+        drawHierarchy(scene, fps, frameTimeMs);
+    }
+    if (showInspector_) {
+        drawInspector();
+    }
+    if (showLighting_) {
+        drawLightingPanel();
+    }
+    if (showDiagnostics_) {
+        drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
+    }
+    if (showAgentConsole_) {
+        drawAgentConsole(scene, frame, fps, frameTimeMs, renderCommandCount);
+    }
+    if (showScriptRunner_) {
+        drawScriptRunner(scene);
+    }
+    if (showScreenshot_) {
+        drawScreenshotPanel(scene);
+    }
+    if (showReproBundle_) {
+        drawReproBundlePanel(scene, frame, fps, frameTimeMs, renderCommandCount);
+    }
+}
+
+void Editor::drawMainMenuBar()
+{
+    if (!ImGui::BeginMainMenuBar()) {
+        return;
+    }
+
+    if (ImGui::BeginMenu("Windows")) {
+        struct Toggle {
+            const char* label;
+            bool* visible;
+        };
+
+        Toggle toggles[] = {
+            {"Hierarchy", &showHierarchy_},
+            {"Inspector", &showInspector_},
+            {"Lighting", &showLighting_},
+            {"Diagnostics", &showDiagnostics_},
+            {"Agent Console", &showAgentConsole_},
+            {"Script Runner", &showScriptRunner_},
+            {"Screenshot", &showScreenshot_},
+            {"Repro Bundle", &showReproBundle_},
+        };
+
+        for (const auto& toggle : toggles) {
+            ImGui::MenuItem(toggle.label, nullptr, toggle.visible);
+        }
+
+        ImGui::EndMenu();
+    }
+
+    ImGui::EndMainMenuBar();
 }
 
 void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(260, 260), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Hierarchy");
+    ImGui::Begin("Hierarchy", &showHierarchy_);
 
     ImGui::Text("%.1f FPS  %.2f ms", fps, frameTimeMs);
     ImGui::Separator();
@@ -223,7 +278,7 @@ void Editor::drawInspector()
 {
     ImGui::SetNextWindowPos(ImVec2(10, 220), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(260, 300), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Inspector");
+    ImGui::Begin("Inspector", &showInspector_);
 
     if (!selected_) {
         ImGui::Text("No object selected");
@@ -310,7 +365,7 @@ void Editor::drawLightingPanel()
 
     ImGui::SetNextWindowPos(ImVec2(280, 320), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 180), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Lighting");
+    ImGui::Begin("Lighting", &showLighting_);
 
     float dir[3] = {lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z};
     if (ImGui::DragFloat3("Direction", dir, 0.01f)) {
@@ -332,7 +387,7 @@ void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float fra
 {
     ImGui::SetNextWindowPos(ImVec2(280, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Agent Console");
+    ImGui::Begin("Agent Console", &showAgentConsole_);
 
     ImGui::InputText("Command", commandBuffer_, sizeof(commandBuffer_));
     ImGui::SameLine();
@@ -367,7 +422,7 @@ void Editor::drawScriptRunner(Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(650, 10), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 300), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Script Runner");
+    ImGui::Begin("Script Runner", &showScriptRunner_);
 
     ImGui::InputText("Script File", scriptBuffer_, sizeof(scriptBuffer_));
     ImGui::SameLine();
@@ -400,7 +455,7 @@ void Editor::drawScreenshotPanel(Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(650, 320), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 120), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Screenshot");
+    ImGui::Begin("Screenshot", &showScreenshot_);
 
     ImGui::InputText("Filename", screenshotBuffer_, sizeof(screenshotBuffer_));
     ImGui::SameLine();
@@ -425,7 +480,7 @@ void Editor::drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float
 {
     ImGui::SetNextWindowPos(ImVec2(650, 450), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360, 150), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Repro Bundle");
+    ImGui::Begin("Repro Bundle", &showReproBundle_);
 
     ImGui::InputText("Bundle Name", bundleBuffer_, sizeof(bundleBuffer_));
     ImGui::SameLine();
@@ -451,7 +506,7 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
 {
     ImGui::SetNextWindowPos(ImVec2(10, 490), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(260, 120), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Diagnostics");
+    ImGui::Begin("Diagnostics", &showDiagnostics_);
 
     if (ImGui::Button("Write Debug State")) {
         std::string text = DebugState::build(frame, fps, frameTimeMs, renderCommandCount, scene, selected_, lastScriptPath_, lastCapturePath_, lastBundlePath_, &lastAssertionFailure_);
@@ -464,4 +519,49 @@ void Editor::drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_
     }
 
     ImGui::End();
+}
+
+void Editor::loadWindowStates()
+{
+    std::unordered_map<std::string, bool> states;
+    Settings::loadEditorWindowStates(states);
+
+    struct Mapping {
+        const char* key;
+        bool* visible;
+    };
+
+    Mapping mappings[] = {
+        {"Hierarchy", &showHierarchy_},
+        {"Inspector", &showInspector_},
+        {"Lighting", &showLighting_},
+        {"Diagnostics", &showDiagnostics_},
+        {"AgentConsole", &showAgentConsole_},
+        {"ScriptRunner", &showScriptRunner_},
+        {"Screenshot", &showScreenshot_},
+        {"ReproBundle", &showReproBundle_},
+    };
+
+    for (const auto& mapping : mappings) {
+        auto it = states.find(mapping.key);
+        if (it != states.end()) {
+            *mapping.visible = it->second;
+        }
+    }
+}
+
+void Editor::saveWindowStates()
+{
+    std::unordered_map<std::string, bool> states = {
+        {"Hierarchy", showHierarchy_},
+        {"Inspector", showInspector_},
+        {"Lighting", showLighting_},
+        {"Diagnostics", showDiagnostics_},
+        {"AgentConsole", showAgentConsole_},
+        {"ScriptRunner", showScriptRunner_},
+        {"Screenshot", showScreenshot_},
+        {"ReproBundle", showReproBundle_},
+    };
+
+    Settings::saveEditorWindowStates(states);
 }
