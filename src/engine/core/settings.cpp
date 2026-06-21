@@ -146,4 +146,11 @@ void setSettingsPath(const std::string& path)
     gSettingsPath = path;
 }
 
+std::string settingsDirectory()
+{
+    std::filesystem::path p(gSettingsPath);
+    std::filesystem::path dir = p.parent_path();
+    return dir.empty() ? std::string(".") : dir.string();
+}
+
 } // namespace Settings

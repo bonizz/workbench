@@ -28,4 +28,8 @@ void saveEditorWindowStates(const std::unordered_map<std::string, bool>& states)
 // settings.txt in the project root.
 void setSettingsPath(const std::string& path);
 
+// Directory containing the current settings file. Empty if the settings path
+// is just a filename in the current working directory.
+std::string settingsDirectory();
+
 } // namespace Settings

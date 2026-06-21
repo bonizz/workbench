@@ -14,6 +14,7 @@
 using scene::MeshRenderer;
 
 #include <cstdio>
+#include <filesystem>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_osx.h"
@@ -43,6 +44,12 @@ bool Editor::init(void* nativeView, void* device)
     NSView* view = (NSView*)nativeView;
     id<MTLDevice> mtlDevice = (id<MTLDevice>)device;
 
+    std::filesystem::path iniDir(Settings::settingsDirectory());
+    if (iniDir.empty()) iniDir = ".";
+    imguiIniPath_ = (iniDir / "imgui.ini").string();
+    io.IniFilename = imguiIniPath_.c_str();
+    ImGui::LoadIniSettingsFromDisk(io.IniFilename);
+
     if (!ImGui_ImplOSX_Init(view)) return false;
     if (!ImGui_ImplMetal_Init(mtlDevice)) return false;
 
@@ -56,6 +63,9 @@ void Editor::shutdown()
 {
     if (!initialized_) return;
     saveWindowStates();
+    if (ImGui::GetCurrentContext()) {
+        ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
+    }
     ImGui_ImplMetal_Shutdown();
     ImGui_ImplOSX_Shutdown();
     ImGui::DestroyContext();

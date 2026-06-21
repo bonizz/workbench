@@ -79,4 +79,5 @@ private:
     std::string bundleOutput_;
     std::string lastBundlePath_;
     std::string lastAssertionFailure_;
+    std::string imguiIniPath_;
 };
