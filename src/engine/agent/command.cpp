@@ -27,8 +27,6 @@ using scene::MeshRenderer;
 
 namespace {
 
-constexpr float kRadToDeg = 180.0f / 3.14159265f;
-
 struct CommandInfo {
     std::string name;
     std::string usage;
@@ -109,11 +107,6 @@ std::string formatVec3(const Vec3& v)
     return oss.str();
 }
 
-Vec3 toDegrees(const Vec3& radians)
-{
-    return {radians.x * kRadToDeg, radians.y * kRadToDeg, radians.z * kRadToDeg};
-}
-
 std::vector<const GameObject*> sortedObjects(const Scene& scene)
 {
     std::vector<const GameObject*> result;
@@ -153,6 +146,46 @@ AgentCommandResult makeAssertionFailure(AgentCommandContext& ctx, const std::str
         *ctx.lastAssertionFailure = message;
     }
     return AgentCommandResult{false, message};
+}
+
+AgentCommandResult assertVec3(AgentCommandContext& ctx,
+                              const std::vector<std::string>& args,
+                              const std::string& valueKind,
+                              const Vec3& actual,
+                              const std::string& valueKindParseError = {})
+{
+    const std::string& parseKind = valueKindParseError.empty() ? valueKind : valueKindParseError;
+    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
+    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
+        return makeError("Invalid " + parseKind + " values");
+    }
+
+    float tolerance = 0.01f;
+    if (args.size() >= 6) {
+        if (!parseFloat(args[5], tolerance)) {
+            return makeError("Invalid tolerance: " + args[5]);
+        }
+        if (tolerance < 0.0f) {
+            return makeError("Tolerance must be non-negative");
+        }
+    }
+
+    auto near = [](float a, float b, float tol) {
+        return std::fabs(a - b) <= tol;
+    };
+
+    if (near(actual.x, ex, tolerance) && near(actual.y, ey, tolerance) && near(actual.z, ez, tolerance)) {
+        return makeSuccess("OK");
+    }
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(4);
+    oss << "Expected " << valueKind << ": " << ex << ", " << ey << ", " << ez << "\n";
+    oss << "Actual " << valueKind << ":   " << actual.x << ", " << actual.y << ", " << actual.z;
+    if (args.size() >= 6) {
+        oss << " (tolerance " << tolerance << ")";
+    }
+    return makeAssertionFailure(ctx, oss.str());
 }
 
 AgentCommandResult cmdSceneList(const std::vector<std::string>&,
@@ -705,42 +738,7 @@ AgentCommandResult cmdAssertRotation(const std::vector<std::string>& args,
         return makeAssertionFailure(ctx, "Object not found: " + name);
     }
 
-    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
-    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
-        return makeError("Invalid rotation values");
-    }
-
-    float tolerance = 0.01f;
-    if (args.size() >= 6) {
-        if (!parseFloat(args[5], tolerance)) {
-            return makeError("Invalid tolerance: " + args[5]);
-        }
-        if (tolerance < 0.0f) {
-            return makeError("Tolerance must be non-negative");
-        }
-    }
-
-    const Vec3& rot = obj->transform().rotation; // radians
-    float ax = rot.x * kRadToDeg;
-    float ay = rot.y * kRadToDeg;
-    float az = rot.z * kRadToDeg;
-
-    auto near = [](float a, float b, float tol) {
-        return std::fabs(a - b) <= tol;
-    };
-
-    if (near(ax, ex, tolerance) && near(ay, ey, tolerance) && near(az, ez, tolerance)) {
-        return makeSuccess("OK");
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(4);
-    oss << "Expected rotation: " << ex << ", " << ey << ", " << ez << "\n";
-    oss << "Actual rotation:   " << ax << ", " << ay << ", " << az;
-    if (args.size() >= 6) {
-        oss << " (tolerance " << tolerance << ")";
-    }
-    return makeAssertionFailure(ctx, oss.str());
+    return assertVec3(ctx, args, "rotation", toDegrees(obj->transform().rotation));
 }
 
 AgentCommandResult cmdAssertPosition(const std::vector<std::string>& args,
@@ -756,38 +754,7 @@ AgentCommandResult cmdAssertPosition(const std::vector<std::string>& args,
         return makeAssertionFailure(ctx, "Object not found: " + name);
     }
 
-    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
-    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
-        return makeError("Invalid position values");
-    }
-
-    float tolerance = 0.01f;
-    if (args.size() >= 6) {
-        if (!parseFloat(args[5], tolerance)) {
-            return makeError("Invalid tolerance: " + args[5]);
-        }
-        if (tolerance < 0.0f) {
-            return makeError("Tolerance must be non-negative");
-        }
-    }
-
-    const Vec3& pos = obj->transform().position;
-    auto near = [](float a, float b, float tol) {
-        return std::fabs(a - b) <= tol;
-    };
-
-    if (near(pos.x, ex, tolerance) && near(pos.y, ey, tolerance) && near(pos.z, ez, tolerance)) {
-        return makeSuccess("OK");
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(4);
-    oss << "Expected position: " << ex << ", " << ey << ", " << ez << "\n";
-    oss << "Actual position:   " << pos.x << ", " << pos.y << ", " << pos.z;
-    if (args.size() >= 6) {
-        oss << " (tolerance " << tolerance << ")";
-    }
-    return makeAssertionFailure(ctx, oss.str());
+    return assertVec3(ctx, args, "position", obj->transform().position);
 }
 
 AgentCommandResult cmdAssertScale(const std::vector<std::string>& args,
@@ -803,38 +770,7 @@ AgentCommandResult cmdAssertScale(const std::vector<std::string>& args,
         return makeAssertionFailure(ctx, "Object not found: " + name);
     }
 
-    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
-    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
-        return makeError("Invalid scale values");
-    }
-
-    float tolerance = 0.01f;
-    if (args.size() >= 6) {
-        if (!parseFloat(args[5], tolerance)) {
-            return makeError("Invalid tolerance: " + args[5]);
-        }
-        if (tolerance < 0.0f) {
-            return makeError("Tolerance must be non-negative");
-        }
-    }
-
-    const Vec3& scale = obj->transform().scale;
-    auto near = [](float a, float b, float tol) {
-        return std::fabs(a - b) <= tol;
-    };
-
-    if (near(scale.x, ex, tolerance) && near(scale.y, ey, tolerance) && near(scale.z, ez, tolerance)) {
-        return makeSuccess("OK");
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(4);
-    oss << "Expected scale: " << ex << ", " << ey << ", " << ez << "\n";
-    oss << "Actual scale:   " << scale.x << ", " << scale.y << ", " << scale.z;
-    if (args.size() >= 6) {
-        oss << " (tolerance " << tolerance << ")";
-    }
-    return makeAssertionFailure(ctx, oss.str());
+    return assertVec3(ctx, args, "scale", obj->transform().scale);
 }
 
 AgentCommandResult cmdAssertColor(const std::vector<std::string>& args,
@@ -1018,44 +954,12 @@ AgentCommandResult cmdAssertWorldPosition(const std::vector<std::string>& args,
         return makeAssertionFailure(ctx, "Object not found: " + name);
     }
 
-    float ex = 0.0f, ey = 0.0f, ez = 0.0f;
-    if (!parseFloat(args[2], ex) || !parseFloat(args[3], ey) || !parseFloat(args[4], ez)) {
-        return makeError("Invalid position values");
-    }
-
-    float tolerance = 0.01f;
-    if (args.size() >= 6) {
-        if (!parseFloat(args[5], tolerance)) {
-            return makeError("Invalid tolerance: " + args[5]);
-        }
-        if (tolerance < 0.0f) {
-            return makeError("Tolerance must be non-negative");
-        }
-    }
-
     // Refresh defensively before reading the world matrix.
     ctx.scene.updateWorldTransforms();
     const Mat4& m = obj->transform().worldMatrix();
-    float ax = m.columns[3][0];
-    float ay = m.columns[3][1];
-    float az = m.columns[3][2];
+    Vec3 actual{m.columns[3][0], m.columns[3][1], m.columns[3][2]};
 
-    auto near = [](float a, float b, float tol) {
-        return std::fabs(a - b) <= tol;
-    };
-
-    if (near(ax, ex, tolerance) && near(ay, ey, tolerance) && near(az, ez, tolerance)) {
-        return makeSuccess("OK");
-    }
-
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(4);
-    oss << "Expected world position: " << ex << ", " << ey << ", " << ez << "\n";
-    oss << "Actual world position:   " << ax << ", " << ay << ", " << az;
-    if (args.size() >= 6) {
-        oss << " (tolerance " << tolerance << ")";
-    }
-    return makeAssertionFailure(ctx, oss.str());
+    return assertVec3(ctx, args, "world position", actual, "position");
 }
 
 const std::vector<CommandEntry>& commandTable();

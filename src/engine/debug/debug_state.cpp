@@ -20,19 +20,12 @@ namespace DebugState {
 
 namespace {
 
-constexpr float kRadToDeg = 180.0f / 3.14159265f;
-
 std::string formatVec3(const Vec3& v)
 {
     std::ostringstream out;
     out << std::fixed << std::setprecision(2);
     out << v.x << ", " << v.y << ", " << v.z;
     return out.str();
-}
-
-Vec3 toDegrees(const Vec3& radians)
-{
-    return {radians.x * kRadToDeg, radians.y * kRadToDeg, radians.z * kRadToDeg};
 }
 
 Vec3 worldPositionOf(const GameObject* obj)

@@ -30,3 +30,8 @@ Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up);
 Vec3 normalize(Vec3 v);
 Vec3 cross(Vec3 a, Vec3 b);
 float dot(Vec3 a, Vec3 b);
+
+inline Vec3 toDegrees(const Vec3& radians)
+{
+    return {radians.x * kRadToDeg, radians.y * kRadToDeg, radians.z * kRadToDeg};
+}
