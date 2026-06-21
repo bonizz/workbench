@@ -3,6 +3,7 @@
 #include "core/object_id.h"
 #include "scene/camera.h"
 #include "scene/game_object.h"
+#include "scene/scene_document.h"
 #include "renderer/render_context.h"
 
 #include <memory>
@@ -11,6 +12,8 @@
 class Scene
 {
 public:
+    Scene();
+
     GameObject* createObject(const std::string& name);
     Camera* createCamera(const Vec3& position);
 
@@ -18,6 +21,9 @@ public:
 
     Camera& camera() { return *camera_; }
     const Camera& camera() const { return *camera_; }
+
+    SceneEnvironment& environment() { return environment_; }
+    const SceneEnvironment& environment() const { return environment_; }
 
     const std::vector<std::unique_ptr<GameObject>>& objects() const { return objects_; }
 
@@ -76,5 +82,6 @@ private:
     uint64_t nextObjectId_ = 1;
     Camera* camera_ = nullptr;
     std::vector<std::unique_ptr<GameObject>> objects_;
+    SceneEnvironment environment_;
     std::string loadedScenePath_;
 };

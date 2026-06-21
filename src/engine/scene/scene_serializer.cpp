@@ -1,487 +1,222 @@
 #include "scene/scene_serializer.h"
 
+#include "json/json.hpp"
+#include "scene/camera.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
+#include "scene/scene_document.h"
 #include "scene/transform.h"
 
+#include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 
 using scene::Component;
 using scene::MeshRenderer;
+using json = nlohmann::json;
 
 namespace SceneSerializer {
 
 namespace {
 
-enum class TokenType {
-    End,
-    ObjectBegin,
-    ObjectEnd,
-    ArrayBegin,
-    ArrayEnd,
-    Colon,
-    Comma,
-    String,
-    Number,
-};
+json vec3ToJson(const Vec3& v)
+{
+    return {v.x, v.y, v.z};
+}
 
-struct Token {
-    TokenType type = TokenType::End;
-    std::string text;
-};
+json float3ToJson(const simd::float3& v)
+{
+    return {v.x, v.y, v.z};
+}
 
-class Tokenizer {
-public:
-    explicit Tokenizer(std::string text)
-        : text_(std::move(text))
-    {
+json float4ToJson(const simd::float4& v)
+{
+    return {v.x, v.y, v.z, v.w};
+}
+
+bool isNumberArray(const json& j, size_t expectedSize)
+{
+    return j.is_array() && j.size() == expectedSize &&
+           std::all_of(j.begin(), j.end(), [](const json& e) { return e.is_number(); });
+}
+
+Vec3 jsonToVec3(const json& j, const Vec3& fallback)
+{
+    if (!isNumberArray(j, 3)) {
+        return fallback;
     }
+    return {j[0].get<float>(), j[1].get<float>(), j[2].get<float>()};
+}
 
-    Token next()
-    {
-        skipWhitespace();
-        if (pos_ >= text_.size()) {
-            return {TokenType::End, ""};
-        }
-
-        char c = text_[pos_];
-        switch (c) {
-            case '{': ++pos_; return {TokenType::ObjectBegin, "{"};
-            case '}': ++pos_; return {TokenType::ObjectEnd, "}"};
-            case '[': ++pos_; return {TokenType::ArrayBegin, "["};
-            case ']': ++pos_; return {TokenType::ArrayEnd, "]"};
-            case ':': ++pos_; return {TokenType::Colon, ":"};
-            case ',': ++pos_; return {TokenType::Comma, ","};
-            case '"': return readString();
-            default:
-                if (isNumberStart(c)) {
-                    return readNumber();
-                }
-                setError(std::string("Unexpected character: ") + c);
-                return {TokenType::End, ""};
-        }
+simd::float3 jsonToFloat3(const json& j, const simd::float3& fallback)
+{
+    if (!isNumberArray(j, 3)) {
+        return fallback;
     }
+    return {j[0].get<float>(), j[1].get<float>(), j[2].get<float>()};
+}
 
-    bool hasError() const { return hasError_; }
-    const std::string& errorMessage() const { return errorMessage_; }
-
-private:
-    void skipWhitespace()
-    {
-        while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_]))) {
-            ++pos_;
-        }
+simd::float4 jsonToFloat4(const json& j, const simd::float4& fallback)
+{
+    if (!isNumberArray(j, 4)) {
+        return fallback;
     }
+    return {j[0].get<float>(), j[1].get<float>(), j[2].get<float>(), j[3].get<float>()};
+}
 
-    static bool isNumberStart(char c)
-    {
-        return std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '+' || c == '.';
+float jsonToFloat(const json& j, float fallback)
+{
+    if (!j.is_number()) {
+        return fallback;
     }
+    return j.get<float>();
+}
 
-    Token readString()
-    {
-        ++pos_; // opening quote
-        size_t start = pos_;
-        while (pos_ < text_.size() && text_[pos_] != '"') {
-            ++pos_;
-        }
-        if (pos_ >= text_.size()) {
-            setError("Unterminated string");
-            return {TokenType::End, ""};
-        }
-        std::string value = text_.substr(start, pos_ - start);
-        ++pos_; // closing quote
-        return {TokenType::String, std::move(value)};
+void addWarning(std::string* warning, const std::string& message)
+{
+    if (!warning) {
+        return;
     }
-
-    Token readNumber()
-    {
-        size_t start = pos_;
-        while (pos_ < text_.size()) {
-            char c = text_[pos_];
-            if (std::isspace(static_cast<unsigned char>(c)) || c == '{' || c == '}' ||
-                c == '[' || c == ']' || c == ':' || c == ',') {
-                break;
-            }
-            ++pos_;
-        }
-        return {TokenType::Number, text_.substr(start, pos_ - start)};
+    if (!warning->empty()) {
+        *warning += "\n";
     }
+    *warning += message;
+}
 
-    void setError(const std::string& message)
-    {
-        if (!hasError_) {
-            hasError_ = true;
-            errorMessage_ = message;
-        }
-    }
-
-    std::string text_;
-    size_t pos_ = 0;
-    bool hasError_ = false;
-    std::string errorMessage_;
-};
-
-class Parser {
-public:
-    Parser(std::string text, std::string* warning)
-        : tokenizer_(std::move(text))
-        , warning_(warning)
-    {
-        current_ = tokenizer_.next();
-    }
-
-    bool parseInto(Scene& scene, std::string& error)
-    {
-        if (!expect(TokenType::ObjectBegin, error)) return false;
-        if (!expectString("objects", error)) return false;
-        if (!expect(TokenType::Colon, error)) return false;
-        if (!expect(TokenType::ArrayBegin, error)) return false;
-
-        while (current_.type != TokenType::ArrayEnd) {
-            if (!parseObject(scene, error, nullptr)) return false;
-            if (current_.type == TokenType::Comma) {
-                advance();
-            } else if (current_.type != TokenType::ArrayEnd) {
-                error = "Expected ',' or ']' in objects array";
-                return false;
-            }
-        }
-
-        if (!expect(TokenType::ArrayEnd, error)) return false;
-        if (!expect(TokenType::ObjectEnd, error)) return false;
-        if (tokenizer_.hasError()) {
-            error = tokenizer_.errorMessage();
-            return false;
-        }
-        return true;
-    }
-
-private:
-    // Creates the GameObject up front (so any field order, including children,
-    // can attach to it), applies fields as they are read, then attaches to
-    // parent. Top-down recursion guarantees the parent exists before children.
-    bool parseObject(Scene& scene, std::string& error, GameObject* parent)
-    {
-        if (!expect(TokenType::ObjectBegin, error)) return false;
-
-        GameObject* obj = scene.createObject("Object");
-
-        bool firstField = true;
-        while (current_.type != TokenType::ObjectEnd) {
-            if (!firstField) {
-                if (current_.type == TokenType::Comma) {
-                    advance();
-                } else {
-                    error = "Expected ',' between object fields";
-                    return false;
-                }
-            }
-            firstField = false;
-
-            if (current_.type != TokenType::String) {
-                error = "Expected field name";
-                return false;
-            }
-            std::string field = current_.text;
-            advance();
-            if (!expect(TokenType::Colon, error)) return false;
-
-            if (field == "name") {
-                if (current_.type != TokenType::String) {
-                    error = "Expected string for name";
-                    return false;
-                }
-                obj->setName(current_.text);
-                advance();
-            } else if (field == "position") {
-                if (!parseFloat3(obj->transform().position, error)) return false;
-            } else if (field == "rotation") {
-                if (!parseFloat3(obj->transform().rotation, error)) return false;
-            } else if (field == "scale") {
-                if (!parseFloat3(obj->transform().scale, error)) return false;
-            } else if (field == "components") {
-                std::vector<std::unique_ptr<Component>> comps;
-                if (!parseComponents(comps, error)) return false;
-                for (auto& c : comps) {
-                    obj->addComponent(std::move(c));
-                }
-            } else if (field == "children") {
-                if (!parseChildren(scene, obj, error)) return false;
-            } else {
-                error = "Unknown field: " + field;
-                return false;
-            }
-        }
-
-        if (!expect(TokenType::ObjectEnd, error)) return false;
-
-        // Attach to parent (top-down: parent already exists and is fresh).
-        if (parent && !scene.setParent(obj, parent)) {
-            error = "Failed to attach child '" + obj->name() + "' to parent";
-            return false;
-        }
-
-        if (!obj->hasComponent<MeshRenderer>()) {
-            addWarning("Object '" + obj->name() + "' has no MeshRenderer and will not render.");
-        }
-
-        return true;
-    }
-
-    bool parseChildren(Scene& scene, GameObject* parent, std::string& error)
-    {
-        if (!expect(TokenType::ArrayBegin, error)) return false;
-
-        while (current_.type != TokenType::ArrayEnd) {
-            if (!parseObject(scene, error, parent)) return false;
-            if (current_.type == TokenType::Comma) {
-                advance();
-            } else if (current_.type != TokenType::ArrayEnd) {
-                error = "Expected ',' or ']' in children array";
-                return false;
-            }
-        }
-
-        return expect(TokenType::ArrayEnd, error);
-    }
-
-    bool parseComponents(std::vector<std::unique_ptr<Component>>& out, std::string& error)
-    {
-        if (!expect(TokenType::ArrayBegin, error)) return false;
-
-        while (current_.type != TokenType::ArrayEnd) {
-            if (!parseComponent(out, error)) return false;
-            if (current_.type == TokenType::Comma) {
-                advance();
-            } else if (current_.type != TokenType::ArrayEnd) {
-                error = "Expected ',' or ']' in components array";
-                return false;
-            }
-        }
-
-        return expect(TokenType::ArrayEnd, error);
-    }
-
-    bool parseComponent(std::vector<std::unique_ptr<Component>>& out, std::string& error)
-    {
-        if (!expect(TokenType::ObjectBegin, error)) return false;
-
-        std::string type;
-        simd::float4 color{1.0f, 1.0f, 1.0f, 1.0f};
-        std::string mesh = "cube";
-        Vec3 angularVelocity{0.0f, 0.0f, 0.0f};
-
-        bool firstField = true;
-        while (current_.type != TokenType::ObjectEnd) {
-            if (!firstField) {
-                if (current_.type == TokenType::Comma) {
-                    advance();
-                } else {
-                    error = "Expected ',' between component fields";
-                    return false;
-                }
-            }
-            firstField = false;
-
-            if (current_.type != TokenType::String) {
-                error = "Expected component field name";
-                return false;
-            }
-            std::string field = current_.text;
-            advance();
-            if (!expect(TokenType::Colon, error)) return false;
-
-            if (field == "type") {
-                if (current_.type != TokenType::String) {
-                    error = "Expected string for component type";
-                    return false;
-                }
-                type = current_.text;
-                advance();
-            } else if (field == "mesh") {
-                if (current_.type != TokenType::String) {
-                    error = "Expected string for mesh";
-                    return false;
-                }
-                mesh = current_.text;
-                advance();
-            } else if (field == "color") {
-                if (!parseFloat4(color, error)) return false;
-            } else if (field == "angularVelocity") {
-                if (!parseFloat3(angularVelocity, error)) return false;
-            } else {
-                error = "Unknown component field: " + field;
-                return false;
-            }
-        }
-
-        if (!expect(TokenType::ObjectEnd, error)) return false;
-
-        if (type == "MeshRenderer") {
-            scene::MeshShape shape;
-            if (!scene::meshShapeFromString(mesh, shape)) {
-                error = "Unknown mesh shape: " + mesh;
-                return false;
-            }
-            auto meshRenderer = std::make_unique<MeshRenderer>();
-            meshRenderer->shape = shape;
-            meshRenderer->color = color;
-            out.push_back(std::move(meshRenderer));
-        } else if (type == "RotateComponent") {
-            auto rotator = std::make_unique<scene::RotateComponent>();
-            rotator->angularVelocityEuler = angularVelocity;
-            out.push_back(std::move(rotator));
-        } else {
-            error = "Unknown component type: " + type;
-            return false;
-        }
-
-        return true;
-    }
-
-    bool parseFloat3(Vec3& out, std::string& error)
-    {
-        if (!expect(TokenType::ArrayBegin, error)) return false;
-        if (!parseNumber(out.x, error)) return false;
-        if (!expect(TokenType::Comma, error)) return false;
-        if (!parseNumber(out.y, error)) return false;
-        if (!expect(TokenType::Comma, error)) return false;
-        if (!parseNumber(out.z, error)) return false;
-        if (!expect(TokenType::ArrayEnd, error)) return false;
-        return true;
-    }
-
-    bool parseFloat4(simd::float4& out, std::string& error)
-    {
-        float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;
-        if (!expect(TokenType::ArrayBegin, error)) return false;
-        if (!parseNumber(x, error)) return false;
-        if (!expect(TokenType::Comma, error)) return false;
-        if (!parseNumber(y, error)) return false;
-        if (!expect(TokenType::Comma, error)) return false;
-        if (!parseNumber(z, error)) return false;
-        if (!expect(TokenType::Comma, error)) return false;
-        if (!parseNumber(w, error)) return false;
-        if (!expect(TokenType::ArrayEnd, error)) return false;
-        out = {x, y, z, w};
-        return true;
-    }
-
-    bool parseNumber(float& out, std::string& error)
-    {
-        if (current_.type != TokenType::Number) {
-            error = "Expected number";
-            return false;
-        }
-        try {
-            size_t idx = 0;
-            out = std::stof(current_.text, &idx);
-            if (idx != current_.text.size()) {
-                error = "Invalid number: " + current_.text;
-                return false;
-            }
-        } catch (...) {
-            error = "Invalid number: " + current_.text;
-            return false;
-        }
-        advance();
-        return true;
-    }
-
-    bool expectString(const std::string& value, std::string& error)
-    {
-        if (current_.type != TokenType::String || current_.text != value) {
-            error = "Expected '" + value + "'";
-            return false;
-        }
-        advance();
-        return true;
-    }
-
-    bool expect(TokenType type, std::string& error)
-    {
-        if (current_.type != type) {
-            error = "Unexpected token";
-            return false;
-        }
-        advance();
-        return true;
-    }
-
-    void advance()
-    {
-        if (!tokenizer_.hasError()) {
-            current_ = tokenizer_.next();
-        }
-    }
-
-    void addWarning(const std::string& message)
-    {
-        if (!warning_) return;
-        if (!warning_->empty()) {
-            *warning_ += "\n";
-        }
-        *warning_ += message;
-    }
-
-    Tokenizer tokenizer_;
-    Token current_;
-    std::string* warning_ = nullptr;
-};
-
-} // namespace
-
-// Recursive object writer. Flat objects (no children) serialize byte-for-byte
-// as before: the "children" field is omitted entirely. Children, if any, are
-// written in insertion order on a deeper-indented line.
-static void writeObject(std::ostream& out, const GameObject& obj, const std::string& indent)
+json writeObject(const GameObject& obj)
 {
     const Transform& t = obj.transform();
-    out << indent << "{ ";
-    out << "\"name\": \"" << obj.name() << "\", ";
-    out << "\"position\": [" << t.position.x << ", " << t.position.y << ", " << t.position.z << "], ";
-    out << "\"rotation\": [" << t.rotation.x << ", " << t.rotation.y << ", " << t.rotation.z << "], ";
-    out << "\"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "], ";
-    out << "\"components\": [";
+    json o;
+    o["name"] = obj.name();
+    o["position"] = vec3ToJson(t.position);
+    o["rotation"] = vec3ToJson(t.rotation);
+    o["scale"] = vec3ToJson(t.scale);
 
-    bool firstComp = true;
+    json comps = json::array();
     for (const auto& comp : obj.components()) {
         if (auto* mesh = dynamic_cast<const MeshRenderer*>(comp.get())) {
-            if (!firstComp) out << ", ";
-            firstComp = false;
-            out << "{\"type\": \"MeshRenderer\", ";
-            out << "\"mesh\": \"" << scene::meshShapeToString(mesh->shape) << "\", ";
-            out << "\"color\": [" << mesh->color.x << ", " << mesh->color.y << ", " << mesh->color.z << ", " << mesh->color.w << "]}";
+            json c;
+            c["type"] = "MeshRenderer";
+            c["mesh"] = scene::meshShapeToString(mesh->shape);
+            c["color"] = float4ToJson(mesh->color);
+            comps.push_back(std::move(c));
         } else if (auto* rot = dynamic_cast<const scene::RotateComponent*>(comp.get())) {
-            if (!firstComp) out << ", ";
-            firstComp = false;
-            out << "{\"type\": \"RotateComponent\", ";
-            out << "\"angularVelocity\": [" << rot->angularVelocityEuler.x << ", " << rot->angularVelocityEuler.y << ", " << rot->angularVelocityEuler.z << "]}";
+            json c;
+            c["type"] = "RotateComponent";
+            c["angularVelocity"] = vec3ToJson(rot->angularVelocityEuler);
+            comps.push_back(std::move(c));
+        }
+    }
+    o["components"] = std::move(comps);
+
+    if (!obj.children().empty()) {
+        json children = json::array();
+        for (const GameObject* child : obj.children()) {
+            children.push_back(writeObject(*child));
+        }
+        o["children"] = std::move(children);
+    }
+
+    return o;
+}
+
+bool parseComponent(GameObject* obj, const json& j, std::string& error)
+{
+    if (!j.is_object()) {
+        error = "Expected component object";
+        return false;
+    }
+
+    std::string type = j.value("type", "");
+    if (type == "MeshRenderer") {
+        scene::MeshShape shape = scene::MeshShape::Cube;
+        std::string mesh = j.value("mesh", "cube");
+        if (!scene::meshShapeFromString(mesh, shape)) {
+            error = "Unknown mesh shape: " + mesh;
+            return false;
+        }
+        auto meshRenderer = std::make_unique<MeshRenderer>();
+        meshRenderer->shape = shape;
+        meshRenderer->color = jsonToFloat4(j.value("color", json::array()), meshRenderer->color);
+        obj->addComponent(std::move(meshRenderer));
+    } else if (type == "RotateComponent") {
+        auto rotator = std::make_unique<scene::RotateComponent>();
+        rotator->angularVelocityEuler = jsonToVec3(j.value("angularVelocity", json::array()), rotator->angularVelocityEuler);
+        obj->addComponent(std::move(rotator));
+    } else {
+        error = "Unknown component type: " + type;
+        return false;
+    }
+
+    return true;
+}
+
+bool parseObject(Scene& scene, const json& j, std::string& error, GameObject* parent, std::string* warning)
+{
+    if (!j.is_object()) {
+        error = "Expected object entry";
+        return false;
+    }
+
+    GameObject* obj = scene.createObject(j.value("name", "Object"));
+    obj->transform().position = jsonToVec3(j.value("position", json::array()), obj->transform().position);
+    obj->transform().rotation = jsonToVec3(j.value("rotation", json::array()), obj->transform().rotation);
+    obj->transform().scale = jsonToVec3(j.value("scale", json::array()), obj->transform().scale);
+
+    const json& components = j.value("components", json::array());
+    for (const auto& comp : components) {
+        if (!parseComponent(obj, comp, error)) {
+            return false;
         }
     }
 
-    out << "]";
-    if (!obj.children().empty()) {
-        out << ", \"children\": [\n";
-        const std::string childIndent = indent + "    ";
-        bool firstChild = true;
-        for (const GameObject* child : obj.children()) {
-            if (!firstChild) out << ",\n";
-            firstChild = false;
-            writeObject(out, *child, childIndent);
+    const json& children = j.value("children", json::array());
+    for (const auto& child : children) {
+        if (!parseObject(scene, child, error, obj, warning)) {
+            return false;
         }
-        out << "\n" << indent << "]";
     }
-    out << " }";
+
+    if (parent && !scene.setParent(obj, parent)) {
+        error = "Failed to attach child '" + obj->name() + "' to parent";
+        return false;
+    }
+
+    if (!obj->hasComponent<MeshRenderer>()) {
+        addWarning(warning, "Object '" + obj->name() + "' has no MeshRenderer and will not render.");
+    }
+
+    return true;
 }
+
+void loadCamera(Camera& camera, const json& j)
+{
+    camera.transform().position = jsonToVec3(j.value("position", json::array()), camera.transform().position);
+    camera.transform().rotation = jsonToVec3(j.value("rotation", json::array()), camera.transform().rotation);
+    camera.setMoveSpeed(jsonToFloat(j.value("moveSpeed", camera.moveSpeed()), camera.moveSpeed()));
+}
+
+void loadEnvironment(SceneEnvironment& env, const json& j)
+{
+    const json& light = j.value("light", json::object());
+    env.light.direction = jsonToFloat3(light.value("direction", json::array()), env.light.direction);
+    env.light.ambient = jsonToFloat(light.value("ambient", env.light.ambient), env.light.ambient);
+    env.light.diffuse = jsonToFloat(light.value("diffuse", env.light.diffuse), env.light.diffuse);
+
+    const json& sky = j.value("sky", json::object());
+    env.sky.horizonColor = jsonToFloat3(sky.value("horizonColor", json::array()), env.sky.horizonColor);
+    env.sky.zenithColor = jsonToFloat3(sky.value("zenithColor", json::array()), env.sky.zenithColor);
+    env.sky.sunColor = jsonToFloat3(sky.value("sunColor", json::array()), env.sky.sunColor);
+    env.sky.sunSize = jsonToFloat(sky.value("sunSize", env.sky.sunSize), env.sky.sunSize);
+    env.sky.sunIntensity = jsonToFloat(sky.value("sunIntensity", env.sky.sunIntensity), env.sky.sunIntensity);
+}
+
+} // namespace
 
 bool save(const Scene& scene, const std::string& path, std::string& error)
 {
@@ -493,17 +228,35 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
         return false;
     }
 
-    std::ofstream out(filePath);
-    if (!out.is_open()) {
-        error = "Failed to open file for writing: " + path;
-        return false;
-    }
+    json j;
+    j["version"] = kSceneVersion;
 
-    out << std::fixed << std::setprecision(4);
-    out << "{\n";
-    out << "  \"objects\": [\n";
+    const Camera& cam = scene.camera();
+    json camera;
+    camera["position"] = vec3ToJson(cam.transform().position);
+    camera["rotation"] = vec3ToJson(cam.transform().rotation);
+    camera["moveSpeed"] = cam.moveSpeed();
+    j["camera"] = std::move(camera);
 
-    bool first = true;
+    const SceneEnvironment& env = scene.environment();
+    json environment;
+    environment["light"] = {
+        {"direction", float3ToJson(env.light.direction)},
+        {"ambient", env.light.ambient},
+        {"diffuse", env.light.diffuse},
+    };
+    environment["sky"] = {
+        {"horizonColor", float3ToJson(env.sky.horizonColor)},
+        {"zenithColor", float3ToJson(env.sky.zenithColor)},
+        {"sunColor", float3ToJson(env.sky.sunColor)},
+        {"sunSize", env.sky.sunSize},
+        {"sunIntensity", env.sky.sunIntensity},
+    };
+    j["environment"] = std::move(environment);
+
+    j["settings"] = json::object();
+
+    json objects = json::array();
     for (const auto& obj : scene.objects()) {
         if (scene.isCamera(obj.get())) {
             continue;
@@ -512,17 +265,17 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
             // Children are serialized nested under their parent; skip them here.
             continue;
         }
+        objects.push_back(writeObject(*obj));
+    }
+    j["objects"] = std::move(objects);
 
-        if (!first) {
-            out << ",\n";
-        }
-        first = false;
-
-        writeObject(out, *obj, "    ");
+    std::ofstream out(filePath);
+    if (!out.is_open()) {
+        error = "Failed to open file for writing: " + path;
+        return false;
     }
 
-    out << "\n  ]\n";
-    out << "}\n";
+    out << j.dump(4) << "\n";
     return true;
 }
 
@@ -540,11 +293,37 @@ bool load(Scene& scene, const std::string& path, std::string& error, std::string
         return false;
     }
 
+    json j;
+    try {
+        j = json::parse(text);
+    } catch (const std::exception& e) {
+        error = std::string("Failed to parse JSON: ") + e.what();
+        return false;
+    } catch (...) {
+        error = "Failed to parse JSON";
+        return false;
+    }
+
+    if (!j.is_object()) {
+        error = "Scene file must contain a JSON object";
+        return false;
+    }
+
+    int version = j.value("version", kSceneVersion);
+    if (version > kSceneVersion) {
+        addWarning(warning, "Unknown scene version: " + std::to_string(version) + "; best-effort load.");
+    }
+
+    loadCamera(scene.camera(), j.value("camera", json::object()));
+    loadEnvironment(scene.environment(), j.value("environment", json::object()));
+
     scene.clearObjects();
 
-    Parser parser(std::move(text), warning);
-    if (!parser.parseInto(scene, error)) {
-        return false;
+    const json& objects = j.value("objects", json::array());
+    for (const auto& obj : objects) {
+        if (!parseObject(scene, obj, error, nullptr, warning)) {
+            return false;
+        }
     }
 
     return true;

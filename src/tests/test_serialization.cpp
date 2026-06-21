@@ -3,9 +3,12 @@
 #include "scene/mesh_renderer.h"
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
+#include "scene/scene_document.h"
 #include "scene/scene_serializer.h"
+#include "core/settings.h"
 
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -258,5 +261,158 @@ void runTestSerialization()
         assert(content.find("\"name\": \"Solo\"") != std::string::npos);
 
         std::filesystem::remove(path);
+    }
+
+    // Camera round-trip.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        scene.camera().transform().position = {1.0f, 2.0f, 3.0f};
+        scene.camera().transform().rotation = {0.1f, 0.2f, 0.3f};
+        scene.camera().setMoveSpeed(7.5f);
+
+        const char* path = "build/tests/camera_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        assert(SceneSerializer::load(loaded, path, error));
+
+        assert(loaded.camera().transform().position.x == 1.0f);
+        assert(loaded.camera().transform().position.y == 2.0f);
+        assert(loaded.camera().transform().position.z == 3.0f);
+        assert(loaded.camera().transform().rotation.x == 0.1f);
+        assert(loaded.camera().transform().rotation.y == 0.2f);
+        assert(loaded.camera().transform().rotation.z == 0.3f);
+        assert(loaded.camera().moveSpeed() == 7.5f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Environment round-trip.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        scene.environment().light.direction = {-0.1f, -0.2f, -0.3f};
+        scene.environment().light.ambient = 0.25f;
+        scene.environment().light.diffuse = 0.75f;
+        scene.environment().sky.horizonColor = {0.1f, 0.2f, 0.3f};
+        scene.environment().sky.zenithColor = {0.4f, 0.5f, 0.6f};
+        scene.environment().sky.sunColor = {0.7f, 0.8f, 0.9f};
+        scene.environment().sky.sunSize = 0.02f;
+        scene.environment().sky.sunIntensity = 2.0f;
+
+        const char* path = "build/tests/environment_scene.scene";
+        std::string error;
+        assert(SceneSerializer::save(scene, path, error));
+
+        Scene loaded;
+        loaded.createCamera({0.0f, 0.0f, 0.0f});
+        assert(SceneSerializer::load(loaded, path, error));
+
+        assert(loaded.environment().light.direction.x == -0.1f);
+        assert(loaded.environment().light.direction.y == -0.2f);
+        assert(loaded.environment().light.direction.z == -0.3f);
+        assert(loaded.environment().light.ambient == 0.25f);
+        assert(loaded.environment().light.diffuse == 0.75f);
+        assert(loaded.environment().sky.horizonColor.x == 0.1f);
+        assert(loaded.environment().sky.zenithColor.y == 0.5f);
+        assert(loaded.environment().sky.sunColor.z == 0.9f);
+        assert(loaded.environment().sky.sunSize == 0.02f);
+        assert(loaded.environment().sky.sunIntensity == 2.0f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Missing version defaults to 1.
+    {
+        const char* path = "build/tests/no_version.scene";
+        std::ofstream out(path);
+        out << R"({"objects": []})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        assert(SceneSerializer::load(scene, path, error));
+
+        std::filesystem::remove(path);
+    }
+
+    // Missing camera/environment/settings blocks apply defaults.
+    {
+        const char* path = "build/tests/minimal_header.scene";
+        std::ofstream out(path);
+        out << R"({"version": 1, "objects": [{"name": "Only", "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "components": [{"type": "MeshRenderer", "mesh": "cube", "color": [1,1,1,1]}]}]})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        assert(SceneSerializer::load(scene, path, error));
+
+        GameObject* obj = nullptr;
+        for (const auto& o : scene.objects()) {
+            if (!scene.isCamera(o.get())) obj = o.get();
+        }
+        assert(obj != nullptr);
+        assert(obj->name() == "Only");
+        assert(scene.camera().transform().position.x == 0.0f);
+        assert(scene.environment().light.ambient == 0.15f);
+
+        std::filesystem::remove(path);
+    }
+
+    // Unknown higher version loads with a warning.
+    {
+        const char* path = "build/tests/future_version.scene";
+        std::ofstream out(path);
+        out << R"({"version": 99, "objects": []})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        std::string warning;
+        assert(SceneSerializer::load(scene, path, error, &warning));
+        assert(!warning.empty());
+        assert(warning.find("Unknown scene version") != std::string::npos);
+
+        std::filesystem::remove(path);
+    }
+
+    // Loading a scene does not touch app settings.
+    {
+        const char* settingsPath = "build/tests/app_settings.json";
+        Settings::setSettingsPath(settingsPath);
+        std::filesystem::remove(settingsPath);
+
+        // Seed app settings with window/editor values.
+        Settings::saveWindowSize(123, 456);
+        std::unordered_map<std::string, bool> states = {{"Hierarchy", false}};
+        Settings::saveEditorWindowStates(states);
+
+        const char* path = "build/tests/settings_unchanged.scene";
+        std::ofstream out(path);
+        out << R"({"objects": [{"name": "X", "position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1], "components": [{"type": "MeshRenderer", "mesh": "cube", "color": [1,1,1,1]}]}]})";
+        out.close();
+
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        std::string error;
+        assert(SceneSerializer::load(scene, path, error));
+
+        int width = 0, height = 0;
+        assert(Settings::loadWindowSize(width, height));
+        assert(width == 123);
+        assert(height == 456);
+
+        std::unordered_map<std::string, bool> loadedStates;
+        assert(Settings::loadEditorWindowStates(loadedStates));
+        assert(loadedStates["Hierarchy"] == false);
+
+        std::filesystem::remove(path);
+        std::filesystem::remove(settingsPath);
     }
 }

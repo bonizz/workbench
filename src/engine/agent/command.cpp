@@ -576,7 +576,7 @@ AgentCommandResult cmdSceneSave(const std::vector<std::string>& args,
         return makeError(error);
     }
 
-    ctx.scene.setLoadedScenePath(args[1]);
+    ctx.scene.setLoadedScenePath(path);
     return makeSuccess("Saved scene to " + path);
 }
 
@@ -599,7 +599,7 @@ AgentCommandResult cmdSceneLoad(const std::vector<std::string>& args,
     }
 
     ctx.selected = nullptr;
-    ctx.scene.setLoadedScenePath(args[1]);
+    ctx.scene.setLoadedScenePath(path);
 
     std::ostringstream oss;
     oss << "Loaded scene from " << path;

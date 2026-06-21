@@ -1,6 +1,14 @@
 #include "scene/scene.h"
 
 #include "core/picking.h"
+
+Scene::Scene()
+{
+    // Default environment matches the historical hard-coded startup scene.
+    environment_.light.direction = {-0.5f, -1.0f, -0.75f};
+    environment_.light.ambient = 0.15f;
+    environment_.light.diffuse = 1.0f;
+}
 #include "renderer/render_command.h"
 #include "scene/mesh_renderer.h"
 

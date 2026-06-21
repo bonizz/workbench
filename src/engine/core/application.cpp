@@ -11,6 +11,7 @@
 #include "scene/scene.h"
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
+#include "scene/scene_serializer.h"
 
 using scene::MeshRenderer;
 
@@ -63,38 +64,51 @@ bool Application::init()
         return false;
     }
     editor_->setRenderer(renderer_.get());
-    editor_->setLightSettings(&lightSettings_);
-    editor_->setSkySettings(&skySettings_);
-
-    lightSettings_.direction = {-0.5f, -1.0f, -0.75f};
-    lightSettings_.ambient = 0.15f;
-    lightSettings_.diffuse = 1.0f;
-
-    // Restore saved light/sky tweaks, falling back to the defaults above.
-    Settings::loadLighting(lightSettings_, skySettings_);
 
     scene_ = std::make_unique<Scene>();
     scene_->createCamera({0.0f, 3.0f, 5.0f});
     scene_->camera().setActive(false);
-    scene_->camera().setAspect(renderer_->aspectRatio());
 
-    if (liveSimulation_) {
-        Vec3 cameraPos = scene_->camera().transform().position;
-        Vec3 cameraRot = scene_->camera().transform().rotation;
-        float cameraSpeed = scene_->camera().moveSpeed();
-        if (Settings::loadCamera(cameraPos, cameraRot, cameraSpeed)) {
-            scene_->camera().transform().position = cameraPos;
-            scene_->camera().transform().rotation = cameraRot;
-            scene_->camera().setMoveSpeed(cameraSpeed);
+    editor_->setLightSettings(&scene_->environment().light);
+    editor_->setSkySettings(&scene_->environment().sky);
+
+    // Restore the last edited scene if possible, otherwise the shipped default.
+    bool loadedScene = false;
+    std::string lastScenePath;
+    if (Settings::loadLastScene(lastScenePath) && std::filesystem::exists(lastScenePath)) {
+        std::string err;
+        std::string warn;
+        if (SceneSerializer::load(*scene_, lastScenePath, err, &warn)) {
+            scene_->setLoadedScenePath(lastScenePath);
+            loadedScene = true;
+        }
+    }
+    if (!loadedScene && std::filesystem::exists("assets/scenes/default.scene.json")) {
+        std::string err;
+        std::string warn;
+        if (SceneSerializer::load(*scene_, "assets/scenes/default.scene.json", err, &warn)) {
+            scene_->setLoadedScenePath("assets/scenes/default.scene.json");
+            loadedScene = true;
         }
     }
 
-    GameObject* cube = scene_->createObject("Cube");
-    cube->transform().position = {0.0f, 0.5f, 0.0f};
-    cube->transform().scale = {0.5f, 0.5f, 0.5f};
-    auto mesh = std::make_unique<MeshRenderer>();
-    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
-    cube->addComponent(std::move(mesh));
+    // In automation mode keep the camera at its deterministic default even if
+    // the loaded scene stored a different viewpoint.
+    if (!liveSimulation_) {
+        scene_->camera().reset();
+    }
+
+    scene_->camera().setAspect(renderer_->aspectRatio());
+
+    if (!loadedScene) {
+        // Built-in fallback: the historical hard-coded cube.
+        GameObject* cube = scene_->createObject("Cube");
+        cube->transform().position = {0.0f, 0.5f, 0.0f};
+        cube->transform().scale = {0.5f, 0.5f, 0.5f};
+        auto mesh = std::make_unique<MeshRenderer>();
+        mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+        cube->addComponent(std::move(mesh));
+    }
 
     onResize(window_->width(), window_->height(), window_->backingScale());
 
@@ -135,10 +149,8 @@ void Application::saveSettings()
         editor_->saveSettings();
         editor_->saveLayout();
     }
-    Settings::saveLighting(lightSettings_, skySettings_);
-    if (liveSimulation_ && scene_) {
-        const Camera& cam = scene_->camera();
-        Settings::saveCamera(cam.transform().position, cam.transform().rotation, cam.moveSpeed());
+    if (liveSimulation_ && scene_ && !scene_->loadedScenePath().empty()) {
+        Settings::saveLastScene(scene_->loadedScenePath());
     }
 }
 
@@ -162,6 +174,8 @@ void Application::recreateScene()
     }
     if (editor_) {
         editor_->setSelected(nullptr);
+        editor_->setLightSettings(&scene_->environment().light);
+        editor_->setSkySettings(&scene_->environment().sky);
     }
 }
 
@@ -332,9 +346,9 @@ void Application::onRender()
 
     RenderContext ctx;
     ctx.setCamera(scene_->camera().viewMatrix(), scene_->camera().projectionMatrix());
-    Vec3 dir = {lightSettings_.direction.x, lightSettings_.direction.y, lightSettings_.direction.z};
-    ctx.setLight(dir, lightSettings_.ambient, lightSettings_.diffuse);
-    ctx.setSky(skySettings_);
+    Vec3 dir = {scene_->environment().light.direction.x, scene_->environment().light.direction.y, scene_->environment().light.direction.z};
+    ctx.setLight(dir, scene_->environment().light.ambient, scene_->environment().light.diffuse);
+    ctx.setSky(scene_->environment().sky);
     scene_->buildRenderCommands(ctx, editor_->selected());
     lastRenderCommandCount_ = ctx.commands().size();
 

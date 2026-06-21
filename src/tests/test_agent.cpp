@@ -126,7 +126,7 @@ void runTestAgent()
 
         result = executeCommand("scene.save test_cmd.scene", ctx);
         assert(result.success);
-        assert(scene.loadedScenePath() == "test_cmd.scene");
+        assert(scene.loadedScenePath() == "assets/scenes/test_cmd.scene");
 
         selected = scene.findObjectById(id);
         assert(selected != nullptr);
