@@ -13,3 +13,4 @@ captures/*
 !captures/.gitkeep
 bundles/*
 !bundles/.gitkeep
+assets/scenes/mesh_roundtrip.scene
