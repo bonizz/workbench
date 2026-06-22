@@ -12,6 +12,7 @@
 #include "scene/game_object.h"
 #include "scene/mesh_renderer.h"
 #include "scene/scene_serializer.h"
+#include "scene/scene_io.h"
 
 using scene::MeshRenderer;
 
@@ -81,6 +82,7 @@ bool Application::init()
         std::string warn;
         if (SceneSerializer::load(*scene_, lastScenePath, err, &warn)) {
             scene_->setLoadedScenePath(lastScenePath);
+            Settings::addRecentScene(lastScenePath);
             loadedScene = true;
         }
     }
@@ -178,6 +180,13 @@ void Application::updateWindowTitle()
     window_->setTitle(title.c_str());
 }
 
+void Application::requestQuit()
+{
+    if (window_) {
+        window_->terminate();
+    }
+}
+
 void Application::newScene()
 {
     recreateScene();
@@ -211,10 +220,47 @@ void Application::newScene()
     updateWindowTitle();
 }
 
+bool Application::loadScene(const std::string& path, std::string& error)
+{
+    // Validate into a throwaway scene first so a bad/missing file leaves the
+    // live scene untouched. Only on success do we rebuild and adopt it.
+    Scene probe;
+    probe.createCamera({0.0f, 3.0f, 5.0f});
+    std::string warning;
+    if (!SceneSerializer::load(probe, path, error, &warning)) {
+        return false;
+    }
+
+    recreateScene();
+    if (!SceneSerializer::load(*scene_, path, error, &warning)) {
+        return false;
+    }
+
+    if (!liveSimulation_) {
+        scene_->camera().reset();
+    }
+    if (renderer_) {
+        scene_->camera().setAspect(renderer_->aspectRatio());
+    }
+
+    scene_->setLoadedScenePath(path);
+    sceneDirty_ = false;
+    Settings::addRecentScene(path);
+    if (liveSimulation_) {
+        Settings::saveLastScene(path);
+    }
+    updateWindowTitle();
+    return true;
+}
+
 void Application::saveScene()
 {
-    if (!scene_ || scene_->loadedScenePath().empty()) {
-        // Save As is not implemented yet.
+    if (!scene_) {
+        return;
+    }
+    if (scene_->loadedScenePath().empty()) {
+        // No path yet: ask the editor to open its Save As modal next frame.
+        saveAsRequested_ = true;
         return;
     }
 
@@ -229,6 +275,41 @@ void Application::saveScene()
         Settings::saveLastScene(scene_->loadedScenePath());
     }
     updateWindowTitle();
+}
+
+bool Application::saveSceneAs(const std::string& filename, std::string& error)
+{
+    if (!scene_) {
+        error = "No scene to save";
+        return false;
+    }
+
+    std::string path = SceneIO::resolveScenePath(filename, error);
+    if (path.empty()) {
+        return false;
+    }
+
+    if (!SceneSerializer::save(*scene_, path, error)) {
+        return false;
+    }
+
+    scene_->setLoadedScenePath(path);
+    sceneDirty_ = false;
+    Settings::addRecentScene(path);
+    if (liveSimulation_) {
+        Settings::saveLastScene(path);
+    }
+    updateWindowTitle();
+    return true;
+}
+
+bool Application::consumeSaveAsRequest()
+{
+    if (!saveAsRequested_) {
+        return false;
+    }
+    saveAsRequested_ = false;
+    return true;
 }
 
 void Application::markSceneDirty()

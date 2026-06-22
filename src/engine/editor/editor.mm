@@ -11,6 +11,7 @@
 #include "scene/mesh_renderer.h"
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
+#include "scene/scene_io.h"
 #include "scene/game_object.h"
 
 using scene::MeshRenderer;
@@ -109,6 +110,14 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
 {
     drawMainMenuBar(scene);
 
+    // Save (Ctrl+S or menu) on an unsaved scene routes here so the modal is
+    // opened and drawn from the top-level path, not from inside the menu block.
+    if (application_ && application_->consumeSaveAsRequest()) {
+        requestSaveAs(scene);
+    }
+    drawSaveAsModal(scene);
+    drawOpenModal();
+
     if (showHierarchy_) {
         drawHierarchy(scene, fps, frameTimeMs);
     }
@@ -142,21 +151,221 @@ void Editor::markSceneDirty()
     }
 }
 
+void Editor::requestSaveAs(Scene& scene)
+{
+    // Prefill with the current scene's base name (sans directory and the
+    // .scene.json suffix), falling back to "untitled".
+    std::string suggestion = "untitled";
+    const std::string& path = scene.loadedScenePath();
+    if (!path.empty()) {
+        size_t slash = path.find_last_of("/\\");
+        std::string base = (slash == std::string::npos) ? path : path.substr(slash + 1);
+        const std::string ext = ".scene.json";
+        if (base.size() > ext.size() &&
+            base.compare(base.size() - ext.size(), ext.size(), ext) == 0) {
+            base = base.substr(0, base.size() - ext.size());
+        }
+        if (!base.empty()) {
+            suggestion = base;
+        }
+    }
+    std::snprintf(saveAsBuffer_, sizeof(saveAsBuffer_), "%s", suggestion.c_str());
+    saveAsError_.clear();
+    saveAsPending_ = true;
+}
+
+void Editor::drawSaveAsModal(Scene&)
+{
+    // OpenPopup is called here (top-level), not from the menu, so it shares the
+    // ImGui ID stack with the matching BeginPopupModal below.
+    if (saveAsPending_) {
+        ImGui::OpenPopup("Save Scene As");
+        saveAsPending_ = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (!ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::TextUnformatted("Save to assets/scenes/");
+    ImGui::SetNextItemWidth(240.0f);
+    bool submit = ImGui::InputText("##saveas", saveAsBuffer_, sizeof(saveAsBuffer_),
+                                   ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    ImGui::TextDisabled(".scene.json");
+
+    if (SceneIO::exists(saveAsBuffer_)) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Will overwrite existing file.");
+    }
+    if (!saveAsError_.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", saveAsError_.c_str());
+    }
+
+    bool empty = saveAsBuffer_[0] == '\0';
+    ImGui::BeginDisabled(empty);
+    bool doSave = ImGui::Button("Save", ImVec2(120.0f, 0.0f)) || (submit && !empty);
+    ImGui::EndDisabled();
+
+    if (doSave && application_) {
+        if (application_->saveSceneAs(saveAsBuffer_, saveAsError_)) {
+            ImGui::CloseCurrentPopup();
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
+namespace {
+
+// Display name for a scene path: the base filename without the .scene.json
+// suffix (e.g. "assets/scenes/arena.scene.json" -> "arena").
+std::string sceneDisplayName(const std::string& path)
+{
+    size_t slash = path.find_last_of("/\\");
+    std::string base = (slash == std::string::npos) ? path : path.substr(slash + 1);
+    const std::string ext = ".scene.json";
+    if (base.size() > ext.size() &&
+        base.compare(base.size() - ext.size(), ext.size(), ext) == 0) {
+        base = base.substr(0, base.size() - ext.size());
+    }
+    return base;
+}
+
+} // namespace
+
+void Editor::requestOpen()
+{
+    openScenes_ = SceneIO::listScenes();
+    openSelected_ = openScenes_.empty() ? -1 : 0;
+    openError_.clear();
+    openPending_ = true;
+}
+
+void Editor::drawOpenModal()
+{
+    // OpenPopup is called here (top-level), matching BeginPopupModal's ID stack.
+    if (openPending_) {
+        ImGui::OpenPopup("Open Scene");
+        openPending_ = false;
+    }
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (!ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::TextUnformatted("Scenes in assets/scenes/");
+
+    if (openScenes_.empty()) {
+        ImGui::TextDisabled("(no scenes found)");
+    } else {
+        ImGui::BeginChild("##scenelist", ImVec2(280.0f, 200.0f), true);
+        for (int i = 0; i < static_cast<int>(openScenes_.size()); ++i) {
+            const std::string name = sceneDisplayName(openScenes_[i]);
+            if (ImGui::Selectable(name.c_str(), openSelected_ == i,
+                                  ImGuiSelectableFlags_AllowDoubleClick)) {
+                openSelected_ = i;
+                if (ImGui::IsMouseDoubleClicked(0) && application_) {
+                    if (application_->loadScene(openScenes_[i], openError_)) {
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            }
+        }
+        ImGui::EndChild();
+    }
+
+    if (!openError_.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", openError_.c_str());
+    }
+
+    bool hasSelection = openSelected_ >= 0 &&
+                        openSelected_ < static_cast<int>(openScenes_.size());
+    ImGui::BeginDisabled(!hasSelection);
+    if (ImGui::Button("Open", ImVec2(120.0f, 0.0f)) && hasSelection && application_) {
+        if (application_->loadScene(openScenes_[openSelected_], openError_)) {
+            ImGui::CloseCurrentPopup();
+        }
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
 void Editor::drawMainMenuBar(Scene& scene)
 {
     if (!ImGui::BeginMainMenuBar()) {
         return;
     }
 
-    if (ImGui::BeginMenu("Scene")) {
-        if (ImGui::MenuItem("New")) {
+    if (ImGui::BeginMenu("File")) {
+        if (ImGui::MenuItem("New",
+#ifdef __APPLE__
+                            "Cmd+N")) {
+#else
+                            "Ctrl+N")) {
+#endif
             if (application_) {
                 application_->newScene();
             }
         }
+        if (ImGui::MenuItem("Open...")) {
+            requestOpen();
+        }
+        if (ImGui::BeginMenu("Recent Scenes")) {
+            std::vector<std::string> recent;
+            Settings::loadRecentScenes(recent);
+            if (recent.empty()) {
+                ImGui::TextDisabled("(none)");
+            }
+            for (const std::string& path : recent) {
+                bool present = std::filesystem::exists(path);
+                // Missing files stay visible but disabled so the list still
+                // reflects history without offering a broken action.
+                ImGui::BeginDisabled(!present);
+                if (ImGui::MenuItem(sceneDisplayName(path).c_str()) && application_) {
+                    std::string error;
+                    application_->loadScene(path, error);
+                }
+                ImGui::EndDisabled();
+            }
+            ImGui::EndMenu();
+        }
+#ifdef __APPLE__
+        if (ImGui::MenuItem("Save", "Cmd+S")) {
+#else
         if (ImGui::MenuItem("Save", "Ctrl+S")) {
+#endif
             if (application_) {
                 application_->saveScene();
+            }
+        }
+        if (ImGui::MenuItem("Save As...")) {
+            requestSaveAs(scene);
+        }
+        ImGui::Separator();
+#ifdef __APPLE__
+        if (ImGui::MenuItem("Quit", "Cmd+Q")) {
+#else
+        if (ImGui::MenuItem("Quit", "Ctrl+Q")) {
+#endif
+            if (application_) {
+                application_->requestQuit();
             }
         }
         ImGui::EndMenu();
@@ -206,6 +415,10 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
     ImGui::Text("%.1f FPS  %.2f ms", fps, frameTimeMs);
     ImGui::Separator();
 
+    drawHierarchyToolbar(scene);
+
+    ImGui::Separator();
+
     // Recursive tree: roots in objects_ order, children in insertion order.
     for (const auto& obj : scene.objects()) {
         if (obj->parent() == nullptr) {
@@ -230,8 +443,11 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         }
     }
 
-    ImGui::Separator();
+    ImGui::End();
+}
 
+void Editor::drawHierarchyToolbar(Scene& scene)
+{
     if (ImGui::Button("Create Cube")) {
         GameObject* obj = scene.createObject("Cube");
         obj->transform().position = {0.0f, 0.5f, 0.0f};
@@ -273,8 +489,6 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
         markSceneDirty();
     }
     ImGui::EndDisabled();
-
-    ImGui::End();
 }
 
 void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)

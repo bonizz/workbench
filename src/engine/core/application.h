@@ -43,7 +43,22 @@ public:
 
     // Scene menu actions (called by Editor).
     void newScene();
+    // Requests application termination. The platform window stops the run loop
+    // on the next iteration, so shutdown still happens cleanly.
+    void requestQuit();
+    // Loads the scene at `path` (a project-relative scene file), replacing the
+    // current scene. On success adopts the path, clears dirty, updates the
+    // title, and records the path in the recent-scenes list. Returns false with
+    // `error` filled on failure (the current scene is left untouched).
+    bool loadScene(const std::string& path, std::string& error);
     void saveScene();
+    // Saves the current scene under assets/scenes/<filename> (.scene.json is
+    // appended if absent) and adopts that path so subsequent Save targets it.
+    // Returns false with `error` filled on an invalid name or write failure.
+    bool saveSceneAs(const std::string& filename, std::string& error);
+    // Returns true exactly once after Save is invoked on an unsaved scene, so
+    // the Editor can open its Save As modal. Consuming clears the request.
+    bool consumeSaveAsRequest();
     void markSceneDirty();
     bool sceneDirty() const { return sceneDirty_; }
 
@@ -123,6 +138,7 @@ private:
     std::string lastAssertionFailure_;
     bool automationFailed_ = false;
     bool sceneDirty_ = false;
+    bool saveAsRequested_ = false;
 
     void updateWindowTitle();
 };
