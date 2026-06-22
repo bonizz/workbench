@@ -216,6 +216,9 @@ void Application::newScene()
         scene_->setLoadedScenePath("");
     }
 
+    if (editor_) {
+        editor_->clearHistory();
+    }
     sceneDirty_ = false;
     updateWindowTitle();
 }
@@ -245,6 +248,9 @@ bool Application::loadScene(const std::string& path, std::string& error)
 
     scene_->setLoadedScenePath(path);
     sceneDirty_ = false;
+    if (editor_) {
+        editor_->clearHistory();
+    }
     Settings::addRecentScene(path);
     if (liveSimulation_) {
         Settings::saveLastScene(path);
@@ -529,7 +535,7 @@ void Application::onRender()
     });
 }
 
-void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier)
+void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier, bool shiftModifier)
 {
     if (ImGui::GetIO().WantCaptureKeyboard) {
         return;
@@ -539,6 +545,13 @@ void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier)
         switch (keyCode) {
             case 's': case 'S': saveScene(); return;
             case 'n': case 'N': newScene(); return;
+            case 'z': case 'Z':
+                if (shiftModifier) {
+                    editor_->redo(*scene_);
+                } else {
+                    editor_->undo(*scene_);
+                }
+                return;
             default: break;
         }
     }

@@ -8,6 +8,7 @@ void runTestSerialization();
 void runTestPicking();
 void runTestDebug();
 void runTestTestSuite();
+void runTestUndo();
 
 int main()
 {
@@ -19,6 +20,7 @@ int main()
     runTestPicking();
     runTestDebug();
     runTestTestSuite();
+    runTestUndo();
 
     std::printf("All tests passed.\n");
     return 0;

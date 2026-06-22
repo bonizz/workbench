@@ -12,6 +12,7 @@
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/scene_io.h"
+#include "scene/scene_serializer.h"
 #include "scene/game_object.h"
 
 using scene::MeshRenderer;
@@ -122,10 +123,10 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
         drawHierarchy(scene, fps, frameTimeMs);
     }
     if (showInspector_) {
-        drawInspector();
+        drawInspector(scene);
     }
     if (showLighting_) {
-        drawLightingPanel();
+        drawLightingPanel(scene);
     }
     if (showDiagnostics_) {
         drawDiagnostics(frame, fps, frameTimeMs, renderCommandCount, scene);
@@ -149,6 +150,55 @@ void Editor::markSceneDirty()
     if (application_) {
         application_->markSceneDirty();
     }
+}
+
+void Editor::pushUndo(Scene& scene)
+{
+    history_.push(scene);
+}
+
+void Editor::coalesceEdit(Scene& scene)
+{
+    // One undo entry per continuous drag/slider/color gesture: snapshot the
+    // scene when the widget is activated (its value is still pre-edit), and
+    // commit that snapshot only if the widget was edited before release. This
+    // avoids both per-frame spam during a drag and phantom entries from a
+    // click-without-drag. Must be called immediately after the widget, while it
+    // is still ImGui's "current item".
+    if (ImGui::IsItemActivated()) {
+        pendingEditSnapshot_ = SceneSerializer::serialize(scene);
+    } else if (ImGui::IsItemDeactivatedAfterEdit()) {
+        if (!pendingEditSnapshot_.empty()) {
+            history_.commitSnapshot(std::move(pendingEditSnapshot_));
+            pendingEditSnapshot_.clear();
+        }
+    }
+}
+
+void Editor::undo(Scene& scene)
+{
+    if (history_.undo(scene)) {
+        // Snapshots don't track selection, and restored objects have fresh
+        // pointers, so drop the selection. Mark dirty so the title updates.
+        selected_ = nullptr;
+        nameBuffer_[0] = '\0';
+        markSceneDirty();
+    }
+}
+
+void Editor::redo(Scene& scene)
+{
+    if (history_.redo(scene)) {
+        selected_ = nullptr;
+        nameBuffer_[0] = '\0';
+        markSceneDirty();
+    }
+}
+
+void Editor::clearHistory()
+{
+    history_.clear();
+    pendingEditSnapshot_.clear();
 }
 
 void Editor::requestSaveAs(Scene& scene)
@@ -371,6 +421,31 @@ void Editor::drawMainMenuBar(Scene& scene)
         ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Edit")) {
+        ImGui::BeginDisabled(!history_.canUndo());
+        if (ImGui::MenuItem("Undo",
+#ifdef __APPLE__
+                            "Cmd+Z")) {
+#else
+                            "Ctrl+Z")) {
+#endif
+            undo(scene);
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(!history_.canRedo());
+        if (ImGui::MenuItem("Redo",
+#ifdef __APPLE__
+                            "Cmd+Shift+Z")) {
+#else
+                            "Ctrl+Shift+Z")) {
+#endif
+            redo(scene);
+        }
+        ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Windows")) {
         struct Toggle {
             const char* label;
@@ -435,6 +510,7 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("GAMEOBJECT")) {
                 if (p->DataSize == sizeof(GameObject*)) {
                     GameObject* dragged = *static_cast<GameObject**>(p->Data);
+                    pushUndo(scene);
                     scene.setParent(dragged, nullptr);
                     markSceneDirty();
                 }
@@ -464,6 +540,7 @@ void Editor::drawHierarchyToolbar(Scene& scene)
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Empty Object")) {
+            pushUndo(scene);
             GameObject* obj = scene.createObject("Object");
             selected_ = obj;
             std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
@@ -477,6 +554,7 @@ void Editor::drawHierarchyToolbar(Scene& scene)
     ImGui::SameLine();
     ImGui::BeginDisabled(!canModifySelection);
     if (ImGui::Button("Duplicate")) {
+        pushUndo(scene);
         GameObject* dup = scene.duplicateObject(selected_);
         if (dup) {
             selected_ = dup;
@@ -487,6 +565,7 @@ void Editor::drawHierarchyToolbar(Scene& scene)
 
     ImGui::SameLine();
     if (ImGui::Button("Delete")) {
+        pushUndo(scene);
         scene.deleteObject(selected_);
         selected_ = nullptr;
         nameBuffer_[0] = '\0';
@@ -497,6 +576,7 @@ void Editor::drawHierarchyToolbar(Scene& scene)
     ImGui::SameLine();
     ImGui::BeginDisabled(!(canModifySelection && selected_->parent() != nullptr));
     if (ImGui::Button("Detach")) {
+        pushUndo(scene);
         scene.setParent(selected_, nullptr);
         markSceneDirty();
     }
@@ -505,6 +585,7 @@ void Editor::drawHierarchyToolbar(Scene& scene)
 
 void Editor::createPrimitive(Scene& scene, scene::MeshShape shape, const char* name)
 {
+    pushUndo(scene);
     GameObject* obj = scene.createObject(name);
     obj->transform().position = {0.0f, 0.5f, 0.0f};
     obj->transform().scale = {0.5f, 0.5f, 0.5f};
@@ -552,6 +633,7 @@ void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)
             if (p->DataSize == sizeof(GameObject*)) {
                 GameObject* dragged = *static_cast<GameObject**>(p->Data);
                 if (dragged != obj) {
+                    pushUndo(scene);
                     scene.setParent(dragged, obj);
                     markSceneDirty();
                 }
@@ -568,7 +650,7 @@ void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)
     }
 }
 
-void Editor::drawInspector()
+void Editor::drawInspector(Scene& scene)
 {
     ImGui::SetNextWindowPos(ImVec2(10, 220), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(260, 300), ImGuiCond_FirstUseEver);
@@ -606,12 +688,15 @@ void Editor::drawInspector()
     if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
         markSceneDirty();
     }
+    coalesceEdit(scene);
     if (ImGui::DragFloat3("Rotation", &rotation.x, 0.05f)) {
         markSceneDirty();
     }
+    coalesceEdit(scene);
     if (ImGui::DragFloat3("Scale", &scale.x, 0.05f)) {
         markSceneDirty();
     }
+    coalesceEdit(scene);
 
     ImGui::Separator();
     ImGui::Text("Components");
@@ -623,6 +708,7 @@ void Editor::drawInspector()
         const char* shapeNames[] = {"Cube", "Sphere", "Plane"};
         int current = static_cast<int>(mesh->shape);
         if (ImGui::Combo("Shape", &current, shapeNames, IM_ARRAYSIZE(shapeNames))) {
+            pushUndo(scene);
             mesh->shape = static_cast<scene::MeshShape>(current);
             markSceneDirty();
         }
@@ -632,6 +718,7 @@ void Editor::drawInspector()
             mesh->color = {color[0], color[1], color[2], color[3]};
             markSceneDirty();
         }
+        coalesceEdit(scene);
     }
 
     if (scene::RotateComponent* rot = selected_->getComponent<scene::RotateComponent>()) {
@@ -639,12 +726,14 @@ void Editor::drawInspector()
         if (ImGui::DragFloat3("Angular Velocity", &rot->angularVelocityEuler.x, 1.0f)) {
             markSceneDirty();
         }
+        coalesceEdit(scene);
     }
 
     ImGui::Separator();
 
     ImGui::BeginDisabled(selected_->hasComponent<MeshRenderer>());
     if (ImGui::Button("Add MeshRenderer")) {
+        pushUndo(scene);
         auto mesh = std::make_unique<MeshRenderer>();
         mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
         selected_->addComponent(std::move(mesh));
@@ -656,6 +745,7 @@ void Editor::drawInspector()
 
     ImGui::BeginDisabled(selected_->hasComponent<scene::RotateComponent>());
     if (ImGui::Button("Add RotateComponent")) {
+        pushUndo(scene);
         selected_->addComponent(std::make_unique<scene::RotateComponent>());
         markSceneDirty();
     }
@@ -664,7 +754,7 @@ void Editor::drawInspector()
     ImGui::End();
 }
 
-void Editor::drawLightingPanel()
+void Editor::drawLightingPanel(Scene& scene)
 {
     if (!lightSettings_) {
         return;
@@ -683,6 +773,7 @@ void Editor::drawLightingPanel()
         lightSettings_->direction = {dir[0], dir[1], dir[2]};
         markSceneDirty();
     }
+    coalesceEdit(scene);
 
     Vec3 n = normalize({lightSettings_->direction.x, lightSettings_->direction.y, lightSettings_->direction.z});
     ImGui::Text("Normalized: %.3f, %.3f, %.3f", n.x, n.y, n.z);
@@ -690,9 +781,11 @@ void Editor::drawLightingPanel()
     if (ImGui::SliderFloat("Ambient", &lightSettings_->ambient, 0.0f, 1.0f)) {
         markSceneDirty();
     }
+    coalesceEdit(scene);
     if (ImGui::SliderFloat("Diffuse", &lightSettings_->diffuse, 0.0f, 2.0f)) {
         markSceneDirty();
     }
+    coalesceEdit(scene);
 
     if (skySettings_) {
         if (ImGui::CollapsingHeader("Sky")) {
@@ -701,18 +794,21 @@ void Editor::drawLightingPanel()
                 skySettings_->horizonColor = {horizon[0], horizon[1], horizon[2]};
                 markSceneDirty();
             }
+            coalesceEdit(scene);
 
             float zenith[3] = {skySettings_->zenithColor.x, skySettings_->zenithColor.y, skySettings_->zenithColor.z};
             if (ImGui::ColorEdit3("Zenith", zenith)) {
                 skySettings_->zenithColor = {zenith[0], zenith[1], zenith[2]};
                 markSceneDirty();
             }
+            coalesceEdit(scene);
 
             float sun[3] = {skySettings_->sunColor.x, skySettings_->sunColor.y, skySettings_->sunColor.z};
             if (ImGui::ColorEdit3("Sun", sun)) {
                 skySettings_->sunColor = {sun[0], sun[1], sun[2]};
                 markSceneDirty();
             }
+            coalesceEdit(scene);
 
             // sunSize is the sun's angular radius in radians (consumed directly
             // by sky.metal's acos comparison). Log scale + 4 decimals give usable
@@ -721,9 +817,11 @@ void Editor::drawLightingPanel()
                                "%.4f", ImGuiSliderFlags_Logarithmic)) {
                 markSceneDirty();
             }
+            coalesceEdit(scene);
             if (ImGui::SliderFloat("Sun Intensity", &skySettings_->sunIntensity, 0.0f, 5.0f)) {
                 markSceneDirty();
             }
+            coalesceEdit(scene);
 
             if (lightSettings_) {
                 ImGui::SeparatorText("Presets");
@@ -733,6 +831,7 @@ void Editor::drawLightingPanel()
                         ImGui::SameLine();
                     }
                     if (ImGui::Button(presets[i].name)) {
+                        pushUndo(scene);
                         *lightSettings_ = presets[i].light;
                         *skySettings_ = presets[i].sky;
                         markSceneDirty();

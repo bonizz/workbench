@@ -216,18 +216,10 @@ void loadEnvironment(SceneEnvironment& env, const json& j)
     env.sky.sunIntensity = jsonToFloat(sky.value("sunIntensity", env.sky.sunIntensity), env.sky.sunIntensity);
 }
 
-} // namespace
-
-bool save(const Scene& scene, const std::string& path, std::string& error)
+// Builds the full scene document (camera + environment + objects tree).
+// Shared by save() (to disk, pretty) and serialize() (to string, compact).
+json buildDocument(const Scene& scene)
 {
-    std::filesystem::path filePath(path);
-    try {
-        std::filesystem::create_directories(filePath.parent_path());
-    } catch (const std::exception& e) {
-        error = std::string("Failed to create directory: ") + e.what();
-        return false;
-    }
-
     json j;
     j["version"] = kSceneVersion;
 
@@ -269,6 +261,54 @@ bool save(const Scene& scene, const std::string& path, std::string& error)
     }
     j["objects"] = std::move(objects);
 
+    return j;
+}
+
+// Applies a parsed document to the scene. When applyCamera is false the camera
+// is left untouched (used by deserialize() so undo never moves the camera).
+bool applyDocument(Scene& scene, const json& j, std::string& error, std::string* warning, bool applyCamera)
+{
+    if (!j.is_object()) {
+        error = "Scene file must contain a JSON object";
+        return false;
+    }
+
+    int version = j.value("version", kSceneVersion);
+    if (version > kSceneVersion) {
+        addWarning(warning, "Unknown scene version: " + std::to_string(version) + "; best-effort load.");
+    }
+
+    if (applyCamera) {
+        loadCamera(scene.camera(), j.value("camera", json::object()));
+    }
+    loadEnvironment(scene.environment(), j.value("environment", json::object()));
+
+    scene.clearObjects();
+
+    const json& objects = j.value("objects", json::array());
+    for (const auto& obj : objects) {
+        if (!parseObject(scene, obj, error, nullptr, warning)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+} // namespace
+
+bool save(const Scene& scene, const std::string& path, std::string& error)
+{
+    std::filesystem::path filePath(path);
+    try {
+        std::filesystem::create_directories(filePath.parent_path());
+    } catch (const std::exception& e) {
+        error = std::string("Failed to create directory: ") + e.what();
+        return false;
+    }
+
+    json j = buildDocument(scene);
+
     std::ofstream out(filePath);
     if (!out.is_open()) {
         error = "Failed to open file for writing: " + path;
@@ -304,29 +344,28 @@ bool load(Scene& scene, const std::string& path, std::string& error, std::string
         return false;
     }
 
-    if (!j.is_object()) {
-        error = "Scene file must contain a JSON object";
+    return applyDocument(scene, j, error, warning, /*applyCamera=*/true);
+}
+
+std::string serialize(const Scene& scene)
+{
+    return buildDocument(scene).dump();
+}
+
+bool deserialize(Scene& scene, const std::string& text, std::string& error)
+{
+    json j;
+    try {
+        j = json::parse(text);
+    } catch (const std::exception& e) {
+        error = std::string("Failed to parse JSON: ") + e.what();
+        return false;
+    } catch (...) {
+        error = "Failed to parse JSON";
         return false;
     }
 
-    int version = j.value("version", kSceneVersion);
-    if (version > kSceneVersion) {
-        addWarning(warning, "Unknown scene version: " + std::to_string(version) + "; best-effort load.");
-    }
-
-    loadCamera(scene.camera(), j.value("camera", json::object()));
-    loadEnvironment(scene.environment(), j.value("environment", json::object()));
-
-    scene.clearObjects();
-
-    const json& objects = j.value("objects", json::array());
-    for (const auto& obj : objects) {
-        if (!parseObject(scene, obj, error, nullptr, warning)) {
-            return false;
-        }
-    }
-
-    return true;
+    return applyDocument(scene, j, error, /*warning=*/nullptr, /*applyCamera=*/false);
 }
 
 } // namespace SceneSerializer
