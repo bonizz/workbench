@@ -380,6 +380,25 @@ AgentCommandResult cmdScriptRun(const std::vector<std::string>& args,
     return makeSuccess(oss.str());
 }
 
+namespace {
+
+// Creates a GameObject at the standard primitive origin/transform with a
+// MeshRenderer of the given shape and the default editor orange color.
+GameObject* createPrimitiveObject(Scene& scene, const std::string& name,
+                                  scene::MeshShape shape)
+{
+    GameObject* obj = scene.createObject(name);
+    obj->transform().position = {0.0f, 0.5f, 0.0f};
+    obj->transform().scale = {0.5f, 0.5f, 0.5f};
+    auto mesh = std::make_unique<MeshRenderer>();
+    mesh->shape = shape;
+    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    obj->addComponent(std::move(mesh));
+    return obj;
+}
+
+} // namespace
+
 AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
                                       AgentCommandContext& ctx)
 {
@@ -388,12 +407,35 @@ AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
         name = args[1];
     }
 
-    GameObject* obj = ctx.scene.createObject(name);
-    obj->transform().position = {0.0f, 0.5f, 0.0f};
-    obj->transform().scale = {0.5f, 0.5f, 0.5f};
-    auto mesh = std::make_unique<MeshRenderer>();
-    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
-    obj->addComponent(std::move(mesh));
+    GameObject* obj = createPrimitiveObject(ctx.scene, name, scene::MeshShape::Cube);
+    ctx.selected = obj;
+
+    std::ostringstream oss;
+    oss << "Created " << obj->name() << " [" << obj->id().value << "]";
+    return makeSuccess(oss.str());
+}
+
+AgentCommandResult cmdSceneCreatePrimitive(const std::vector<std::string>& args,
+                                           AgentCommandContext& ctx)
+{
+    if (args.size() < 2) {
+        return makeError("Usage: scene.create_primitive <shape> [name]");
+    }
+    scene::MeshShape shape;
+    if (!scene::meshShapeFromString(args[1], shape)) {
+        return makeError("Unknown mesh shape: " + args[1] + " (expected cube, sphere, or plane)");
+    }
+
+    std::string name;
+    if (args.size() >= 3) {
+        name = args[2];
+    } else {
+        // Default name = capitalized shape ("cube" -> "Cube").
+        name = scene::meshShapeToString(shape);
+        name[0] = name[0] - 'a' + 'A';
+    }
+
+    GameObject* obj = createPrimitiveObject(ctx.scene, name, shape);
     ctx.selected = obj;
 
     std::ostringstream oss;
@@ -1100,6 +1142,11 @@ const std::vector<CommandEntry>& commandTable()
           "Creates a new GameObject at the origin.",
           "scene.create_cube Cube2"},
          cmdSceneCreateCube},
+        {{"scene.create_primitive",
+          "scene.create_primitive <shape> [name]",
+          "Creates a GameObject with a MeshRenderer of the given shape (cube, sphere, plane).",
+          "scene.create_primitive sphere Orb"},
+         cmdSceneCreatePrimitive},
         {{"scene.delete",
           "scene.delete <id>",
           "Deletes a GameObject by ObjectId.",

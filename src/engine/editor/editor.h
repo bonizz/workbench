@@ -12,6 +12,8 @@ class MetalRenderer;
 class Scene;
 class GameObject;
 
+namespace scene { enum class MeshShape : int; }
+
 class Editor
 {
 public:
@@ -52,6 +54,7 @@ private:
     void drawOpenModal();
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
     void drawHierarchyToolbar(Scene& scene);
+    void createPrimitive(Scene& scene, scene::MeshShape shape, const char* name);
     void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();
     void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, Scene& scene);

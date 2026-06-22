@@ -448,16 +448,28 @@ void Editor::drawHierarchy(Scene& scene, float fps, float frameTimeMs)
 
 void Editor::drawHierarchyToolbar(Scene& scene)
 {
-    if (ImGui::Button("Create Cube")) {
-        GameObject* obj = scene.createObject("Cube");
-        obj->transform().position = {0.0f, 0.5f, 0.0f};
-        obj->transform().scale = {0.5f, 0.5f, 0.5f};
-        auto mesh = std::make_unique<MeshRenderer>();
-        mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
-        obj->addComponent(std::move(mesh));
-        selected_ = obj;
-        std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
-        markSceneDirty();
+    if (ImGui::Button("Create ▾")) {
+        ImGui::OpenPopup("##CreateMenu");
+    }
+
+    if (ImGui::BeginPopup("##CreateMenu")) {
+        if (ImGui::MenuItem("Cube")) {
+            createPrimitive(scene, scene::MeshShape::Cube, "Cube");
+        }
+        if (ImGui::MenuItem("Sphere")) {
+            createPrimitive(scene, scene::MeshShape::Sphere, "Sphere");
+        }
+        if (ImGui::MenuItem("Plane")) {
+            createPrimitive(scene, scene::MeshShape::Plane, "Plane");
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Empty Object")) {
+            GameObject* obj = scene.createObject("Object");
+            selected_ = obj;
+            std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+            markSceneDirty();
+        }
+        ImGui::EndPopup();
     }
 
     bool canModifySelection = selected_ && !scene.isCamera(selected_);
@@ -489,6 +501,20 @@ void Editor::drawHierarchyToolbar(Scene& scene)
         markSceneDirty();
     }
     ImGui::EndDisabled();
+}
+
+void Editor::createPrimitive(Scene& scene, scene::MeshShape shape, const char* name)
+{
+    GameObject* obj = scene.createObject(name);
+    obj->transform().position = {0.0f, 0.5f, 0.0f};
+    obj->transform().scale = {0.5f, 0.5f, 0.5f};
+    auto mesh = std::make_unique<MeshRenderer>();
+    mesh->shape = shape;
+    mesh->color = {0.95f, 0.55f, 0.20f, 1.0f};
+    obj->addComponent(std::move(mesh));
+    selected_ = obj;
+    std::snprintf(nameBuffer_, sizeof(nameBuffer_), "%s", obj->name().c_str());
+    markSceneDirty();
 }
 
 void Editor::drawHierarchyNode(Scene& scene, GameObject* obj)

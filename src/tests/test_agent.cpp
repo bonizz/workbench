@@ -138,6 +138,35 @@ void runTestAgent()
         std::filesystem::remove("assets/scenes/test_cmd.scene");
     }
 
+    // scene.create_primitive command (generalized creator for cube/sphere/plane).
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* selected = nullptr;
+        AgentCommandContext ctx{scene, selected};
+
+        // Default name = capitalized shape; selection moves to it.
+        AgentCommandResult result = executeCommand("scene.create_primitive sphere", ctx);
+        assert(result.success);
+        assert(selected != nullptr);
+        assert(selected->name() == "Sphere");
+        assert(selected->getComponent<MeshRenderer>()->shape == scene::MeshShape::Sphere);
+
+        // Explicit name + shape.
+        result = executeCommand("scene.create_primitive plane Flatty", ctx);
+        assert(result.success);
+        assert(selected->name() == "Flatty");
+        assert(selected->getComponent<MeshRenderer>()->shape == scene::MeshShape::Plane);
+
+        // Missing shape argument.
+        result = executeCommand("scene.create_primitive", ctx);
+        assert(!result.success);
+
+        // Unknown shape.
+        result = executeCommand("scene.create_primitive teapot", ctx);
+        assert(!result.success);
+    }
+
     // Component agent commands.
     {
         Scene scene;
@@ -517,6 +546,7 @@ void runTestAgent()
         assert(result.output.find("assert.position") != std::string::npos);
         assert(result.output.find("assert.scale") != std::string::npos);
         assert(result.output.find("assert.color") != std::string::npos);
+        assert(result.output.find("scene.create_primitive") != std::string::npos);
     }
 
     // component.set_mesh command.
