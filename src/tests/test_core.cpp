@@ -73,6 +73,7 @@ void runTestCore()
         assert(opts.autoExit);
         assert(opts.extraFrames == 5);
         assert(!opts.runTests);
+        assert(opts.errors.empty());
     }
 
     // CLI --run-tests flag.
@@ -81,6 +82,7 @@ void runTestCore()
         CliOptions opts = parseCliOptions(3, args);
         assert(opts.runTests);
         assert(opts.autoExit);
+        assert(opts.errors.empty());
     }
 
     // CLI defaults.
@@ -91,14 +93,29 @@ void runTestCore()
         assert(opts.bundleName.empty());
         assert(!opts.autoExit);
         assert(opts.extraFrames == 3);
+        assert(opts.errors.empty());
     }
 
-    // CLI missing arguments.
+    // CLI missing arguments: a flag immediately followed by another flag has no
+    // value. The field stays default and the failure is reported in errors
+    // (rather than printed to stderr, which would noise up the test binary).
     {
         const char* args[] = {"sandbox", "--run-script", "--bundle", "name"};
         CliOptions opts = parseCliOptions(4, args);
         assert(opts.runScript.empty());
         assert(opts.bundleName == "name");
+        assert(opts.errors.size() == 1);
+        assert(opts.errors[0] == "Missing argument for --run-script");
+    }
+
+    // CLI invalid integer: --frames with a non-numeric value is reported and
+    // extraFrames keeps its default.
+    {
+        const char* args[] = {"sandbox", "--frames", "abc"};
+        CliOptions opts = parseCliOptions(3, args);
+        assert(opts.extraFrames == 3);
+        assert(opts.errors.size() == 1);
+        assert(opts.errors[0] == "Invalid integer for --frames: abc");
     }
 
     // Settings: window size round-trip.

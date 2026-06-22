@@ -1,6 +1,5 @@
 #include "core/cli_options.h"
 
-#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -16,20 +15,22 @@ bool isOption(const char* arg)
     return std::strlen(arg) >= 2 && arg[0] == '-' && arg[1] == '-';
 }
 
-bool readNext(int argc, const char* argv[], int& i, std::string& out)
+bool readNext(int argc, const char* argv[], int& i, std::string& out,
+              std::vector<std::string>& errors)
 {
     if (i + 1 < argc && !isOption(argv[i + 1])) {
         out = argv[++i];
         return true;
     }
-    std::fprintf(stderr, "Missing argument for %s\n", argv[i]);
+    errors.emplace_back(std::string("Missing argument for ") + argv[i]);
     return false;
 }
 
-bool readNextInt(int argc, const char* argv[], int& i, int& out)
+bool readNextInt(int argc, const char* argv[], int& i, int& out,
+                 std::vector<std::string>& errors)
 {
     if (i + 1 >= argc || isOption(argv[i + 1])) {
-        std::fprintf(stderr, "Missing argument for %s\n", argv[i]);
+        errors.emplace_back(std::string("Missing argument for ") + argv[i]);
         return false;
     }
 
@@ -39,7 +40,7 @@ bool readNextInt(int argc, const char* argv[], int& i, int& out)
         out = std::stoi(value, &idx);
         return idx == std::strlen(value);
     } catch (...) {
-        std::fprintf(stderr, "Invalid integer for %s: %s\n", argv[i - 1], value);
+        errors.emplace_back(std::string("Invalid integer for ") + argv[i - 1] + ": " + value);
         return false;
     }
 }
@@ -53,15 +54,15 @@ CliOptions parseCliOptions(int argc, const char* argv[])
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
         if (isFlag(arg, "--run-script")) {
-            readNext(argc, argv, i, options.runScript);
+            readNext(argc, argv, i, options.runScript, options.errors);
         } else if (isFlag(arg, "--bundle")) {
-            readNext(argc, argv, i, options.bundleName);
+            readNext(argc, argv, i, options.bundleName, options.errors);
         } else if (isFlag(arg, "--run-tests")) {
             options.runTests = true;
         } else if (isFlag(arg, "--exit")) {
             options.autoExit = true;
         } else if (isFlag(arg, "--frames")) {
-            readNextInt(argc, argv, i, options.extraFrames);
+            readNextInt(argc, argv, i, options.extraFrames, options.errors);
         }
     }
 
