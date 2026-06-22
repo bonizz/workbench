@@ -38,6 +38,12 @@ bool intersectRayPlane(const Vec3& origin, const Vec3& dir, float& t);
 // selected object's origin; the same radius is used to draw it and to pick it.
 constexpr float kGizmoHandleRadius = 0.25f;
 
+// Minimum screen-space hit radius (pixels) for acquiring the translate gizmo
+// handle. The handle's own projected pixel size is used when it is larger; this
+// floor guarantees a comfortable, camera-independent click target when the
+// object is far away and the drawn sphere shrinks to a few pixels.
+constexpr float kGizmoMinHitRadiusPx = 14.0f;
+
 // Intersect a ray with the unbounded horizontal plane y = planeY. Returns false
 // if the ray is parallel to the plane or the hit is behind the origin. On hit,
 // fills hitPoint. Unlike intersectRayPlane this has no x/z bounds and supports
@@ -46,6 +52,28 @@ bool intersectRayHorizontalPlane(const Vec3& origin,
                                  const Vec3& dir,
                                  float planeY,
                                  Vec3& hitPoint);
+
+// Projects a world point to window pixels via a view-projection matrix.
+// Returns false if the point is behind the camera (clip w <= 0). On success
+// outX/outY are window-pixel coordinates (origin top-left, y down). Points
+// outside the viewport are still projected so edge-near hit tests work.
+bool projectToScreen(const Vec3& worldPos,
+                     const Mat4& viewProj,
+                     float viewportW,
+                     float viewportH,
+                     float& outX,
+                     float& outY);
+
+// Screen-space pixel hit radius for a gizmo handle of `worldRadius` centered at
+// `worldCenter`, as seen by a camera at `cameraPosition` with vertical fov
+// `fovY` (radians) and viewport height `viewportH` pixels. Equals the handle's
+// projected pixel radius, but never smaller than kGizmoMinHitRadiusPx, so the
+// handle stays clickable when the object is far away.
+float gizmoHitRadiusPx(const Vec3& worldCenter,
+                       float worldRadius,
+                       const Vec3& cameraPosition,
+                       float fovY,
+                       float viewportH);
 
 // Gizmo drag move: keep Y, apply the XZ offset captured at drag start. The
 // caller captures dragOffset = objectPos - hitPoint (XZ only) when the drag

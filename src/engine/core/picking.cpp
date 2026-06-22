@@ -154,3 +154,45 @@ Vec3 planeDragPosition(const Vec3& hitPoint, const Vec3& dragOffset, float prese
 {
     return {hitPoint.x + dragOffset.x, preservedY, hitPoint.z + dragOffset.z};
 }
+
+bool projectToScreen(const Vec3& worldPos,
+                     const Mat4& viewProj,
+                     float viewportW,
+                     float viewportH,
+                     float& outX,
+                     float& outY)
+{
+    simd::float4 clip = viewProj * simd::float4{worldPos.x, worldPos.y, worldPos.z, 1.0f};
+    if (clip.w <= 0.0f) {
+        // Behind the camera (this perspective matrix yields w == -z_eye, which
+        // is positive only for points in front). Don't acquire off-screen handles.
+        return false;
+    }
+    float ndcX = clip.x / clip.w;
+    float ndcY = clip.y / clip.w;
+    // NDC y is up; window y is down (origin top-left).
+    outX = (ndcX + 1.0f) * 0.5f * viewportW;
+    outY = (1.0f - ndcY) * 0.5f * viewportH;
+    return true;
+}
+
+float gizmoHitRadiusPx(const Vec3& worldCenter,
+                       float worldRadius,
+                       const Vec3& cameraPosition,
+                       float fovY,
+                       float viewportH)
+{
+    float dx = worldCenter.x - cameraPosition.x;
+    float dy = worldCenter.y - cameraPosition.y;
+    float dz = worldCenter.z - cameraPosition.z;
+    float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+    float visiblePx = kGizmoMinHitRadiusPx;
+    if (dist > kEpsilon && fovY > 0.0f) {
+        // Projected pixel radius of a sphere of worldRadius at distance `dist`:
+        // angular radius (worldRadius/dist) divided by the half-fov tangent, then
+        // scaled to the half-viewport height.
+        visiblePx = (worldRadius / dist) / std::tan(fovY * 0.5f) * (viewportH * 0.5f);
+    }
+    return visiblePx < kGizmoMinHitRadiusPx ? kGizmoMinHitRadiusPx : visiblePx;
+}

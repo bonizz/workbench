@@ -346,4 +346,43 @@ void runTestPicking()
         Vec3 away = normalize({-1.0f, 0.0f, 0.0f});
         assert(!intersectRaySphere(local, away, kGizmoHandleRadius, t));
     }
+
+    // projectToScreen: a world point dead ahead projects to the viewport center;
+    // a point behind the camera is rejected.
+    {
+        const float W = 600.0f;
+        const float H = 600.0f;
+        Mat4 view = lookAt({0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+        Mat4 proj = perspective(60.0f * kDegToRad, 1.0f, 0.1f, 100.0f);
+        Mat4 viewProj = multiply(proj, view);
+
+        float sx = 0.0f;
+        float sy = 0.0f;
+        assert(projectToScreen({0.0f, 0.0f, 0.0f}, viewProj, W, H, sx, sy));
+        assert(std::fabs(sx - W * 0.5f) < 1e-2f); // dead center
+        assert(std::fabs(sy - H * 0.5f) < 1e-2f);
+
+        // Behind the camera (z=6 > eye z=5): no projection.
+        assert(!projectToScreen({0.0f, 0.0f, 6.0f}, viewProj, W, H, sx, sy));
+    }
+
+    // gizmoHitRadiusPx: equals the handle's projected pixel radius up close, but
+    // is floored at kGizmoMinHitRadiusPx when the object is far away. This is the
+    // contract that makes the handle stay clickable at distance.
+    {
+        const float fovY = 60.0f * kDegToRad;
+        const float H = 600.0f;
+        Vec3 center = {0.0f, 0.0f, 0.0f};
+
+        // Up close (~3.9 units): visible sphere is ~33px, well above the floor.
+        Vec3 close = {0.0f, 0.0f, 3.9f};
+        float closePx = gizmoHitRadiusPx(center, kGizmoHandleRadius, close, fovY, H);
+        assert(closePx > 30.0f && closePx < 36.0f);
+        assert(closePx > kGizmoMinHitRadiusPx);
+
+        // Far away (100 units): clamped to the floor.
+        Vec3 far = {0.0f, 0.0f, 100.0f};
+        float farPx = gizmoHitRadiusPx(center, kGizmoHandleRadius, far, fovY, H);
+        assert(std::fabs(farPx - kGizmoMinHitRadiusPx) < 1e-4f);
+    }
 }

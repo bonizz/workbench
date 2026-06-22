@@ -638,23 +638,36 @@ void Application::onMouseButton(int button, bool down, float x, float y)
     Ray ray = rayFromPixel(x, y);
 
     // If a selected MeshRenderer's gizmo handle is clicked, begin a drag instead
-    // of reselecting. The handle is a sphere at the object's world origin.
+    // of reselecting. Hit-tested in screen space (not world-space ray/sphere) so
+    // the handle stays an easy click target regardless of how far the object is
+    // from the camera: the hit radius is the handle's projected pixel radius,
+    // floored at kGizmoMinHitRadiusPx. See picking.h.
     GameObject* selected = const_cast<GameObject*>(editor_->selected());
     if (selected && selected->getComponent<MeshRenderer>()) {
         scene_->updateWorldTransforms();
         simd::float4 wp = selected->transform().worldMatrix().columns[3];
         Vec3 center = {wp.x, wp.y, wp.z};
-        Vec3 local = {ray.origin.x - center.x, ray.origin.y - center.y, ray.origin.z - center.z};
-        float t = 0.0f;
-        if (intersectRaySphere(local, ray.direction, kGizmoHandleRadius, t)) {
-            Vec3 planeHit;
-            if (intersectRayHorizontalPlane(ray.origin, ray.direction, center.y, planeHit)) {
-                gizmoDragging_ = true;
-                gizmoDragMoved_ = false;
-                gizmoDragTarget_ = selected;
-                gizmoDragPlaneY_ = center.y;
-                gizmoDragOffset_ = {center.x - planeHit.x, 0.0f, center.z - planeHit.z};
-                return;
+
+        const Camera& cam = scene_->camera();
+        Mat4 viewProj = multiply(cam.projectionMatrix(), cam.viewMatrix());
+        float handleSx = 0.0f;
+        float handleSy = 0.0f;
+        if (projectToScreen(center, viewProj, width, height, handleSx, handleSy)) {
+            float hitRadiusPx = gizmoHitRadiusPx(center, kGizmoHandleRadius,
+                                                 cam.transform().position,
+                                                 60.0f * kDegToRad, height);
+            float dxPx = x - handleSx;
+            float dyPx = y - handleSy;
+            if (dxPx * dxPx + dyPx * dyPx <= hitRadiusPx * hitRadiusPx) {
+                Vec3 planeHit;
+                if (intersectRayHorizontalPlane(ray.origin, ray.direction, center.y, planeHit)) {
+                    gizmoDragging_ = true;
+                    gizmoDragMoved_ = false;
+                    gizmoDragTarget_ = selected;
+                    gizmoDragPlaneY_ = center.y;
+                    gizmoDragOffset_ = {center.x - planeHit.x, 0.0f, center.z - planeHit.z};
+                    return;
+                }
             }
         }
     }
