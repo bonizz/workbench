@@ -14,10 +14,14 @@ if [ "${VERBOSE:-}" = "1" ] || [ -t 1 ]; then
     premake5 ninja
     echo "Building debug..."
     ninja Debug
+    echo "Generating compile_commands.json..."
+    python3 scripts/generate_compile_commands.py
     echo "Done. Run with: ./build/debug/sandbox"
 else
     log=$(mktemp)
-    if ! { premake5 ninja && ninja Debug; } > "$log" 2>&1; then
+    if ! { premake5 ninja \
+            && ninja Debug \
+            && python3 scripts/generate_compile_commands.py; } > "$log" 2>&1; then
         tail -50 "$log"
         rm -f "$log"
         exit 1

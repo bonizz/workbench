@@ -1,0 +1,29 @@
+{
+  // Use clangd as the C++ language server. Disable the Microsoft C/C++
+  // extension's IntelliSense so the two don't fight over completions,
+  // diagnostics, and go-to-definition.
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+
+  // clangd picks up compile_commands.json from the project root automatically.
+  // Background indexing gives faster cross-file navigation after the project
+  // is first opened.
+  "clangd.arguments": [
+    "--background-index",
+    "--compile-commands-dir=.",
+    "--completion-style=detailed",
+    "--header-insertion=iwyu"
+  ],
+
+  // Use clangd for explicit formatting commands.
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "[objc]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "[objcpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  }
+}

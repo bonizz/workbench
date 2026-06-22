@@ -15,4 +15,4 @@ bundles/*
 !bundles/.gitkeep
 assets/scenes/mesh_roundtrip.scene
 settings.txt
-settings.json
+/settings.json

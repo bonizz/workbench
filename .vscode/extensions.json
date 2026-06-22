@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "llvm-vs-code-extensions.vscode-clangd"
+  ],
+  "unwantedRecommendations": [
+    // The Microsoft C/C++ extension conflicts with clangd. Keep it disabled
+    // for this workspace so go-to-definition and diagnostics are consistent.
+    "ms-vscode.cpptools"
+  ]
+}

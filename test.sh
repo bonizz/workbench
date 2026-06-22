@@ -11,12 +11,15 @@ if [ "${VERBOSE:-}" = "1" ] || [ -t 1 ]; then
     premake5 ninja
     echo "Building tests..."
     ninja build/tests/debug/tests
+    echo "Generating compile_commands.json..."
+    python3 scripts/generate_compile_commands.py
     echo "Running tests..."
     ./build/tests/debug/tests
 else
     log=$(mktemp)
     if ! { premake5 ninja \
             && ninja build/tests/debug/tests \
+            && python3 scripts/generate_compile_commands.py \
             && ./build/tests/debug/tests; } > "$log" 2>&1; then
         tail -50 "$log"
         rm -f "$log"
