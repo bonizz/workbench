@@ -1,6 +1,8 @@
 # Plan: Remove `scene.create_cube` (superseded by `scene.create_primitive`)
 
-Status: PROPOSED. Not yet implemented.
+Status: IMPLEMENTED in working tree (uncommitted). `scene.create_cube` /
+`cmdSceneCreateCube` are removed from `command.cpp`, and the `.wbs` scripts,
+tests, and docs are migrated to `scene.create_primitive cube`. Pending commit.
 
 ## Goal
 
