@@ -1,4 +1,4 @@
-scene.create_cube Spinner
+scene.create_primitive cube Spinner
 component.add_rotator Spinner
 component.set_rotator Spinner 0 90 0
 sim.step 1.0

@@ -1,2 +1,2 @@
-scene.create_cube Box
+scene.create_primitive cube Box
 assert.has_component Box MeshRenderer

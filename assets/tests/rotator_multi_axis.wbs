@@ -1,4 +1,4 @@
-scene.create_cube Gyro
+scene.create_primitive cube Gyro
 component.add_rotator Gyro
 component.set_rotator Gyro 10 20 30
 sim.step 1.0

@@ -1,2 +1,2 @@
-scene.create_cube Cube
+scene.create_primitive cube Cube
 assert.color Cube 0.95 0.55 0.20 1.0

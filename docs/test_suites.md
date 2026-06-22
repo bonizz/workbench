@@ -15,7 +15,7 @@ Each file must end with `.wbs`. Only files directly inside `assets/tests/` are e
 ```text
 assets/tests/
 ├── components.wbs
-├── create_cube.wbs
+├── create_primitive.wbs
 └── duplicate_object.wbs
 
 assets/tests/examples/
@@ -37,7 +37,7 @@ From the CLI:
 
 ```text
 PASS components
-PASS create_cube
+PASS create_primitive
 PASS duplicate_object
 
 Summary:
@@ -80,7 +80,7 @@ bundles/test_failures/missing_object_fail/
 A test script is a normal `.wbs` script. Use assertions to verify behavior:
 
 ```text
-scene.create_cube CubeA
+scene.create_primitive cube CubeA
 assert.object_exists CubeA
 assert.has_component CubeA MeshRenderer
 ```
@@ -92,7 +92,7 @@ Because each test starts with a fresh scene, the default camera is the only obje
 Tests can exercise runtime behavior via `sim.step`. In `--run-tests` mode the simulation is **not** auto-advanced each frame; only `sim.step` advances it, so tests are reproducible. Example (`assets/tests/rotator.wbs`):
 
 ```text
-scene.create_cube Spinner
+scene.create_primitive cube Spinner
 component.add_rotator Spinner
 component.set_rotator Spinner 0 90 0
 sim.step 1.0
@@ -135,12 +135,12 @@ the other `*_fail.wbs` examples).
 `assets/tests/mesh_shapes.wbs` covers all three supported primitives:
 
 ```text
-scene.create_cube Boxy
+scene.create_primitive cube Boxy
 assert.mesh Boxy cube
-scene.create_cube Bally
+scene.create_primitive cube Bally
 component.set_mesh Bally sphere
 assert.mesh Bally sphere
-scene.create_cube Flatty
+scene.create_primitive cube Flatty
 component.set_mesh Flatty plane
 assert.mesh Flatty plane
 ```

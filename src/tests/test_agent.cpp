@@ -107,7 +107,7 @@ void runTestAgent()
         GameObject* selected = nullptr;
         AgentCommandContext ctx{scene, selected};
 
-        AgentCommandResult result = executeCommand("scene.create_cube TestA", ctx);
+        AgentCommandResult result = executeCommand("scene.create_primitive cube TestA", ctx);
         assert(result.success);
         assert(selected != nullptr);
         assert(selected->name() == "TestA");
@@ -204,7 +204,7 @@ void runTestAgent()
         const char* path = "build/tests/test_script.wbs";
         std::ofstream out(path);
         out << "# Create a cube\n\n";
-        out << "scene.create_cube ScriptCube\n";
+        out << "scene.create_primitive cube ScriptCube\n";
         out << "transform.set_position 2 1.0 2.0 3.0\n";
         out.close();
 
@@ -232,7 +232,7 @@ void runTestAgent()
 
         const char* path = "build/tests/failing_script.wbs";
         std::ofstream out(path);
-        out << "scene.create_cube A\n";
+        out << "scene.create_primitive cube A\n";
         out << "scene.delete 99\n";
         out.close();
 
@@ -254,7 +254,7 @@ void runTestAgent()
         std::filesystem::create_directories("assets/scripts");
         const char* path = "assets/scripts/agent_script.wbs";
         std::ofstream out(path);
-        out << "scene.create_cube AgentCube\n";
+        out << "scene.create_primitive cube AgentCube\n";
         out.close();
 
         AgentCommandResult result = executeCommand("script.run agent_script.wbs", ctx);
@@ -338,7 +338,7 @@ void runTestAgent()
         const char* path = "build/tests/assert_fail.wbs";
         std::ofstream out(path);
         out << "assert.object_exists Cube\n";
-        out << "scene.create_cube Cube\n";
+        out << "scene.create_primitive cube Cube\n";
         out.close();
 
         ScriptResult result = runScript(ctx, path, "assert_fail.wbs");

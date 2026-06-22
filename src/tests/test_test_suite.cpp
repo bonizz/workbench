@@ -31,7 +31,7 @@ void runTestTestSuite()
 
         {
             std::ofstream pass("build/tests/suite/pass.wbs");
-            pass << "scene.create_cube TestCube\n";
+            pass << "scene.create_primitive cube TestCube\n";
             pass << "assert.object_exists TestCube\n";
         }
 

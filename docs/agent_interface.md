@@ -49,7 +49,6 @@ AgentCommandResult executeCommand(const std::string& command, AgentCommandContex
 | `scene.list` | List all objects sorted by id. |
 | `scene.select <id>` | Select the object with the given id. |
 | `scene.get_selected` | Show the current selection. |
-| `scene.create_cube [name]` | Create a new GameObject at the origin. |
 | `scene.create_primitive <shape> [name]` | Create a GameObject with a MeshRenderer of `cube`, `sphere`, or `plane`. Default name is the capitalized shape. |
 | `scene.delete <id>` | Delete the object with the given id. |
 | `scene.duplicate <id>` | Duplicate the object with the given id. |

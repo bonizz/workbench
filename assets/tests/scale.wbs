@@ -1,2 +1,2 @@
-scene.create_cube Cube
+scene.create_primitive cube Cube
 assert.scale Cube 0.5 0.5 0.5

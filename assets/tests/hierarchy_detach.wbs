@@ -1,6 +1,6 @@
-scene.create_cube Parent
+scene.create_primitive cube Parent
 transform.set_position 2 5 0 0
-scene.create_cube Child
+scene.create_primitive cube Child
 transform.set_position 3 1 0 0
 scene.set_parent Child Parent
 assert.world_position Child 5.5 0 0

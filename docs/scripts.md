@@ -18,10 +18,10 @@ Example (`assets/scripts/create_test_scene.wbs`):
 ```text
 # Create two cubes and save the scene.
 
-scene.create_cube CubeA
+scene.create_primitive cube CubeA
 transform.set_position 2 1.0 0.0 0.0
 
-scene.create_cube CubeB
+scene.create_primitive cube CubeB
 transform.set_position 3 -1.0 0.0 0.0
 
 scene.save sample.scene
@@ -48,7 +48,7 @@ Example success:
 ```text
 Executed 3 commands.
 
-scene.create_cube CubeA
+scene.create_primitive cube CubeA
 -> Created CubeA [2]
 
 scene.save sample.scene

@@ -1,4 +1,4 @@
-scene.create_cube Orb
+scene.create_primitive cube Orb
 component.set_mesh Orb sphere
 scene.save mesh_roundtrip.scene
 scene.load mesh_roundtrip.scene

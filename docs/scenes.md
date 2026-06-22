@@ -38,8 +38,8 @@ the **world** transform is derived as `parent.worldMatrix * localMatrix`.
 From the Agent Console or a script (name-based, stable across load):
 
 ```
-scene.create_cube Parent
-scene.create_cube Child
+scene.create_primitive cube Parent
+scene.create_primitive cube Child
 scene.set_parent Child Parent
 scene.detach Child
 scene.get_parent Child
@@ -113,7 +113,7 @@ Paths are resolved relative to `assets/scenes/`. `save` creates the directory if
 
 The **Hierarchy** panel has three buttons:
 
-- **Create Cube** — adds a new white cube at the origin and selects it.
+- **Create ▾** — opens a menu to add a Cube, Sphere, Plane, or Empty Object at the origin and select it.
 - **Duplicate** — duplicates the selected object and selects the copy.
 - **Delete** — removes the selected object and clears selection.
 
@@ -122,10 +122,10 @@ The camera cannot be duplicated or deleted.
 ## Agent Workflow Example
 
 ```
-scene.create_cube TestA
+scene.create_primitive cube TestA
 transform.set_position 2 1.0 0.0 0.0
 
-scene.create_cube TestB
+scene.create_primitive cube TestB
 transform.set_position 3 -1.0 0.0 0.0
 
 scene.save test.scene

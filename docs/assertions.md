@@ -80,7 +80,7 @@ Actual position:   0.0000, 0.5000, 0.0000
 A script can describe a scene mutation and then verify the result:
 
 ```text
-scene.create_cube CubeA
+scene.create_primitive cube CubeA
 assert.object_exists CubeA
 assert.has_component CubeA MeshRenderer
 assert.object_count 3
@@ -90,10 +90,10 @@ The default scene already contains the camera and a cube, so after creating `Cub
 
 ## CLI workflow
 
-Create a script in `assets/scripts/create_cube_test.wbs`:
+Create a script in `assets/scripts/create_primitive_test.wbs`:
 
 ```text
-scene.create_cube TestCube
+scene.create_primitive cube TestCube
 assert.object_exists TestCube
 assert.has_component TestCube MeshRenderer
 ```
@@ -101,7 +101,7 @@ assert.has_component TestCube MeshRenderer
 Run it unattended:
 
 ```bash
-./build/debug/sandbox --run-script create_cube_test.wbs --exit
+./build/debug/sandbox --run-script create_primitive_test.wbs --exit
 ```
 
 - If every assertion passes: exit code `0`.

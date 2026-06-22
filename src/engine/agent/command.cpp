@@ -399,22 +399,6 @@ GameObject* createPrimitiveObject(Scene& scene, const std::string& name,
 
 } // namespace
 
-AgentCommandResult cmdSceneCreateCube(const std::vector<std::string>& args,
-                                      AgentCommandContext& ctx)
-{
-    std::string name = "Cube";
-    if (args.size() >= 2) {
-        name = args[1];
-    }
-
-    GameObject* obj = createPrimitiveObject(ctx.scene, name, scene::MeshShape::Cube);
-    ctx.selected = obj;
-
-    std::ostringstream oss;
-    oss << "Created " << obj->name() << " [" << obj->id().value << "]";
-    return makeSuccess(oss.str());
-}
-
 AgentCommandResult cmdSceneCreatePrimitive(const std::vector<std::string>& args,
                                            AgentCommandContext& ctx)
 {
@@ -1137,11 +1121,6 @@ const std::vector<CommandEntry>& commandTable()
           "Returns the currently selected GameObject.",
           "scene.get_selected"},
          cmdSceneGetSelected},
-        {{"scene.create_cube",
-          "scene.create_cube [name]",
-          "Creates a new GameObject at the origin.",
-          "scene.create_cube Cube2"},
-         cmdSceneCreateCube},
         {{"scene.create_primitive",
           "scene.create_primitive <shape> [name]",
           "Creates a GameObject with a MeshRenderer of the given shape (cube, sphere, plane).",

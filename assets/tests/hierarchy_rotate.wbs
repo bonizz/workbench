@@ -1,6 +1,6 @@
-scene.create_cube Pivot
+scene.create_primitive cube Pivot
 transform.set_position 2 0 0 0
-scene.create_cube Arm
+scene.create_primitive cube Arm
 transform.set_position 3 1 0 0
 scene.set_parent Arm Pivot
 component.add_rotator Pivot
