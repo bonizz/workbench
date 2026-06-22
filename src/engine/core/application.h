@@ -113,6 +113,11 @@ private:
     // Translate gizmo drag state (milestone 0.11). Owned here because all input,
     // camera, and ray math live in Application; selection itself stays in Editor.
     bool gizmoDragging_ = false;
+    // True once the current gizmo drag has actually moved the object. The
+    // pre-edit undo snapshot is captured on the first move (via beginDragEdit)
+    // and committed on release only when this is true, so a click-without-drag
+    // pushes no undo entry.
+    bool gizmoDragMoved_ = false;
     Vec3 gizmoDragOffset_ = {};
     float gizmoDragPlaneY_ = 0.0f;
     GameObject* gizmoDragTarget_ = nullptr;

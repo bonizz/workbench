@@ -612,8 +612,16 @@ void Application::onMouseButton(int button, bool down, float x, float y)
     // Mouse up always ends any gizmo drag, even over an ImGui panel, so the
     // drag state never lingers past a release.
     if (!down) {
+        bool wasDragging = gizmoDragging_;
+        bool moved = gizmoDragMoved_;
         gizmoDragging_ = false;
+        gizmoDragMoved_ = false;
         gizmoDragTarget_ = nullptr;
+        // Commit the drag's single coalesced undo entry, but only if the drag
+        // actually moved something (a bare click on the handle does nothing).
+        if (wasDragging && moved && editor_) {
+            editor_->endDragEdit();
+        }
         return;
     }
 
@@ -642,6 +650,7 @@ void Application::onMouseButton(int button, bool down, float x, float y)
             Vec3 planeHit;
             if (intersectRayHorizontalPlane(ray.origin, ray.direction, center.y, planeHit)) {
                 gizmoDragging_ = true;
+                gizmoDragMoved_ = false;
                 gizmoDragTarget_ = selected;
                 gizmoDragPlaneY_ = center.y;
                 gizmoDragOffset_ = {center.x - planeHit.x, 0.0f, center.z - planeHit.z};
@@ -673,6 +682,15 @@ void Application::onLeftMouseMove(float x, float y)
     Vec3 hit;
     if (!intersectRayHorizontalPlane(ray.origin, ray.direction, gizmoDragPlaneY_, hit)) {
         return;
+    }
+
+    // Capture the pre-edit undo snapshot on the first move of the drag (before
+    // the position is applied), so the whole gesture coalesces into one entry.
+    if (!gizmoDragMoved_) {
+        gizmoDragMoved_ = true;
+        if (editor_) {
+            editor_->beginDragEdit(*scene_);
+        }
     }
 
     // Update X/Z only; Y is preserved by planeDragPosition. Edits the local

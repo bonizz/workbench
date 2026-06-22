@@ -29,9 +29,15 @@ public:
     // trims to kMaxEntries (oldest first).
     void push(Scene& scene);
 
-    // Commits an already-serialized snapshot (e.g. one captured at the start of
-    // a coalesced drag). Same bookkeeping as push() without re-serializing.
-    void commitSnapshot(std::string snapshot);
+    // Coalesces a continuous edit (an ImGui drag/slider/color, or a viewport
+    // gizmo drag) into a single undo entry. Capture the pre-edit state with
+    // beginPending() at the start of the gesture, then commitPending() once at
+    // the end. discardPending() drops a gesture that never mutated anything
+    // (e.g. a click-without-drag). beginPending may be called at most once per
+    // gesture; a later beginPending overwrites any unstaged snapshot.
+    void beginPending(Scene& scene);
+    void commitPending();
+    void discardPending();
 
     // Restores the previous checkpoint. Saves the current live state to redo.
     // Returns false if there is nothing to undo.
@@ -49,6 +55,7 @@ public:
 private:
     std::deque<std::string> undo_;
     std::deque<std::string> redo_;
+    std::string pending_;
 
     void trimUndo();
 };

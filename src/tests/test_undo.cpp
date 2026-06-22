@@ -165,4 +165,39 @@ void runTestUndo()
         h.push(scene);
         assert(h.redoCount() == 0); // redo cleared by the new checkpoint
     }
+
+    // 7. Coalesced pending edit: beginPending before several mutations,
+    // commitPending once -> a single undo reverts the whole gesture. Mirrors a
+    // viewport gizmo drag (per-frame position writes coalesced to one entry).
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        GameObject* obj = scene.createObject("Cube");
+        obj->transform().position = {0.0f, 0.0f, 0.0f};
+
+        SceneHistory h;
+        h.beginPending(scene);                       // pre-edit snapshot
+        obj->transform().position = {1.0f, 0.0f, 0.0f};
+        obj->transform().position = {2.0f, 0.0f, 0.0f};
+        obj->transform().position = {3.0f, 0.0f, 0.0f};
+        h.commitPending();
+
+        assert(h.undoCount() == 1);                  // one entry, not three
+        assert(h.undo(scene));
+        GameObject* r = firstAuthored(scene);
+        assert(r != nullptr);
+        assert(r->transform().position.x == 0.0f);   // back to pre-edit
+    }
+
+    // 8. discardPending: a gesture that began but never mutated (e.g. a click
+    // on the gizmo handle without dragging) leaves history untouched.
+    {
+        Scene scene;
+        scene.createCamera({0.0f, 0.0f, 0.0f});
+        SceneHistory h;
+        h.beginPending(scene);
+        h.discardPending();
+        assert(h.undoCount() == 0);
+        assert(!h.canUndo());
+    }
 }

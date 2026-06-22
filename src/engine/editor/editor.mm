@@ -12,7 +12,6 @@
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/scene_io.h"
-#include "scene/scene_serializer.h"
 #include "scene/game_object.h"
 
 using scene::MeshRenderer;
@@ -161,18 +160,27 @@ void Editor::coalesceEdit(Scene& scene)
 {
     // One undo entry per continuous drag/slider/color gesture: snapshot the
     // scene when the widget is activated (its value is still pre-edit), and
-    // commit that snapshot only if the widget was edited before release. This
-    // avoids both per-frame spam during a drag and phantom entries from a
-    // click-without-drag. Must be called immediately after the widget, while it
-    // is still ImGui's "current item".
+    // commit that snapshot only if the widget was edited before release. A
+    // click-without-drag (activated but not edited) is discarded so it leaves
+    // no phantom undo entry. Must be called immediately after the widget,
+    // while it is still ImGui's "current item".
     if (ImGui::IsItemActivated()) {
-        pendingEditSnapshot_ = SceneSerializer::serialize(scene);
+        history_.beginPending(scene);
     } else if (ImGui::IsItemDeactivatedAfterEdit()) {
-        if (!pendingEditSnapshot_.empty()) {
-            history_.commitSnapshot(std::move(pendingEditSnapshot_));
-            pendingEditSnapshot_.clear();
-        }
+        history_.commitPending();
+    } else if (ImGui::IsItemDeactivated()) {
+        history_.discardPending();
     }
+}
+
+void Editor::beginDragEdit(Scene& scene)
+{
+    history_.beginPending(scene);
+}
+
+void Editor::endDragEdit()
+{
+    history_.commitPending();
 }
 
 void Editor::undo(Scene& scene)
@@ -198,7 +206,6 @@ void Editor::redo(Scene& scene)
 void Editor::clearHistory()
 {
     history_.clear();
-    pendingEditSnapshot_.clear();
 }
 
 void Editor::requestSaveAs(Scene& scene)

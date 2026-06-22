@@ -7,6 +7,7 @@ void SceneHistory::clear()
 {
     undo_.clear();
     redo_.clear();
+    pending_.clear();
 }
 
 void SceneHistory::trimUndo()
@@ -18,14 +19,30 @@ void SceneHistory::trimUndo()
 
 void SceneHistory::push(Scene& scene)
 {
-    commitSnapshot(SceneSerializer::serialize(scene));
-}
-
-void SceneHistory::commitSnapshot(std::string snapshot)
-{
-    undo_.push_back(std::move(snapshot));
+    undo_.push_back(SceneSerializer::serialize(scene));
     redo_.clear();
     trimUndo();
+}
+
+void SceneHistory::beginPending(Scene& scene)
+{
+    pending_ = SceneSerializer::serialize(scene);
+}
+
+void SceneHistory::commitPending()
+{
+    if (pending_.empty()) {
+        return;
+    }
+    undo_.push_back(std::move(pending_));
+    pending_.clear();
+    redo_.clear();
+    trimUndo();
+}
+
+void SceneHistory::discardPending()
+{
+    pending_.clear();
 }
 
 bool SceneHistory::undo(Scene& scene)

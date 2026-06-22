@@ -46,6 +46,11 @@ public:
     void undo(Scene& scene);
     void redo(Scene& scene);
     void clearHistory();
+    // Brackets a viewport gizmo drag as a single coalesced undo entry.
+    // beginDragEdit captures the pre-edit snapshot; endDragEdit commits it.
+    // Called by Application at drag start (first move) and release.
+    void beginDragEdit(Scene& scene);
+    void endDragEdit();
 
 private:
     void drawMainMenuBar(Scene& scene);
@@ -125,5 +130,4 @@ private:
     std::string lastAssertionFailure_;
     std::string imguiIniPath_;
     SceneHistory history_;
-    std::string pendingEditSnapshot_;
 };
