@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace Settings {
 
@@ -29,6 +30,17 @@ bool loadLastScene(std::string& path);
 
 // Save the last opened scene path.
 void saveLastScene(const std::string& path);
+
+// Maximum number of entries kept in the recent-scenes list.
+inline constexpr size_t kMaxRecentScenes = 10;
+
+// Load the recently opened/saved scene paths, most-recent first. Returns false
+// if none are recorded.
+bool loadRecentScenes(std::vector<std::string>& paths);
+
+// Record `path` as the most recent scene: move it to the front of the list,
+// drop any duplicate, and cap the list at kMaxRecentScenes entries.
+void addRecentScene(const std::string& path);
 
 // Override the settings file path. Used by tests to avoid touching the real
 // settings.json in the project root.

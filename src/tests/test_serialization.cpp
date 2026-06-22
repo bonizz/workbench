@@ -4,15 +4,18 @@
 #include "scene/rotate_component.h"
 #include "scene/scene.h"
 #include "scene/scene_document.h"
+#include "scene/scene_io.h"
 #include "scene/scene_serializer.h"
 #include "core/settings.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <vector>
 
 using scene::MeshRenderer;
 
@@ -413,6 +416,139 @@ void runTestSerialization()
         assert(loadedStates["Hierarchy"] == false);
 
         std::filesystem::remove(path);
+        std::filesystem::remove(settingsPath);
+    }
+
+    // SceneIO::resolveScenePath appends the extension when absent.
+    {
+        std::string error;
+        assert(SceneIO::resolveScenePath("arena", error) == "assets/scenes/arena.scene.json");
+        assert(error.empty());
+    }
+
+    // SceneIO::resolveScenePath leaves an existing extension untouched.
+    {
+        std::string error;
+        assert(SceneIO::resolveScenePath("arena.scene.json", error) ==
+               "assets/scenes/arena.scene.json");
+        assert(error.empty());
+    }
+
+    // SceneIO::resolveScenePath trims surrounding whitespace.
+    {
+        std::string error;
+        assert(SceneIO::resolveScenePath("  arena  ", error) ==
+               "assets/scenes/arena.scene.json");
+    }
+
+    // SceneIO::resolveScenePath rejects empty / whitespace-only names.
+    {
+        std::string error;
+        assert(SceneIO::resolveScenePath("", error).empty());
+        assert(!error.empty());
+        error.clear();
+        assert(SceneIO::resolveScenePath("   ", error).empty());
+        assert(!error.empty());
+    }
+
+    // SceneIO::resolveScenePath rejects path separators and parent traversal.
+    {
+        std::string error;
+        assert(SceneIO::resolveScenePath("sub/arena", error).empty());
+        assert(!error.empty());
+        error.clear();
+        assert(SceneIO::resolveScenePath("a\\b", error).empty());
+        assert(!error.empty());
+        error.clear();
+        assert(SceneIO::resolveScenePath("../escape", error).empty());
+        assert(!error.empty());
+    }
+
+    // SceneIO::exists reflects the resolved path on disk.
+    {
+        std::filesystem::create_directories("assets/scenes");
+        const char* path = "assets/scenes/_io_probe.scene.json";
+        std::filesystem::remove(path);
+        assert(!SceneIO::exists("_io_probe"));
+
+        std::ofstream out(path);
+        out << "{}";
+        out.close();
+        assert(SceneIO::exists("_io_probe"));
+        assert(SceneIO::exists("_io_probe.scene.json"));
+
+        std::filesystem::remove(path);
+    }
+
+    // SceneIO::listScenes returns sorted, project-relative .scene.json paths and
+    // ignores non-scene files.
+    {
+        std::filesystem::create_directories("assets/scenes");
+        const char* a = "assets/scenes/_list_b.scene.json";
+        const char* b = "assets/scenes/_list_a.scene.json";
+        const char* other = "assets/scenes/_list_note.txt";
+        for (const char* p : {a, b, other}) {
+            std::ofstream(p) << "{}";
+        }
+
+        std::vector<std::string> scenes = SceneIO::listScenes();
+        auto has = [&](const std::string& path) {
+            return std::find(scenes.begin(), scenes.end(), path) != scenes.end();
+        };
+        assert(has("assets/scenes/_list_a.scene.json"));
+        assert(has("assets/scenes/_list_b.scene.json"));
+        assert(!has(other));
+        // Output is sorted: _list_a precedes _list_b.
+        auto ia = std::find(scenes.begin(), scenes.end(), "assets/scenes/_list_a.scene.json");
+        auto ib = std::find(scenes.begin(), scenes.end(), "assets/scenes/_list_b.scene.json");
+        assert(ia < ib);
+
+        std::filesystem::remove(a);
+        std::filesystem::remove(b);
+        std::filesystem::remove(other);
+    }
+
+    // Settings recent-scenes list: front insertion, dedup, and cap.
+    {
+        const std::string settingsPath = "test_recent_settings.json";
+        std::filesystem::remove(settingsPath);
+        Settings::setSettingsPath(settingsPath);
+
+        std::vector<std::string> empty;
+        assert(!Settings::loadRecentScenes(empty));
+
+        Settings::addRecentScene("assets/scenes/one.scene.json");
+        Settings::addRecentScene("assets/scenes/two.scene.json");
+        Settings::addRecentScene("assets/scenes/three.scene.json");
+
+        std::vector<std::string> recent;
+        assert(Settings::loadRecentScenes(recent));
+        // Most-recent first.
+        assert(recent.size() == 3);
+        assert(recent[0] == "assets/scenes/three.scene.json");
+        assert(recent[1] == "assets/scenes/two.scene.json");
+        assert(recent[2] == "assets/scenes/one.scene.json");
+
+        // Re-adding an existing path moves it to the front without duplicating.
+        Settings::addRecentScene("assets/scenes/one.scene.json");
+        recent.clear();
+        Settings::loadRecentScenes(recent);
+        assert(recent.size() == 3);
+        assert(recent[0] == "assets/scenes/one.scene.json");
+        assert(recent[1] == "assets/scenes/three.scene.json");
+        assert(recent[2] == "assets/scenes/two.scene.json");
+
+        // Cap at kMaxRecentScenes: add more unique entries than the limit.
+        for (int i = 0; i < 15; ++i) {
+            Settings::addRecentScene("assets/scenes/s" + std::to_string(i) + ".scene.json");
+        }
+        recent.clear();
+        Settings::loadRecentScenes(recent);
+        assert(recent.size() == Settings::kMaxRecentScenes);
+        // The newest addition is at the front.
+        assert(recent[0] == "assets/scenes/s14.scene.json");
+
+        Settings::setSettingsPath("settings.json");
         std::filesystem::remove(settingsPath);
     }
 }

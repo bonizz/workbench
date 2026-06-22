@@ -164,6 +164,52 @@ void saveLastScene(const std::string& path)
     saveJson(j);
 }
 
+bool loadRecentScenes(std::vector<std::string>& paths)
+{
+    json j = loadJson();
+    if (!j.contains("recentScenes") || !j["recentScenes"].is_array()) {
+        return false;
+    }
+
+    bool foundAny = false;
+    for (const auto& entry : j["recentScenes"]) {
+        if (entry.is_string()) {
+            paths.push_back(entry.get<std::string>());
+            foundAny = true;
+        }
+    }
+
+    return foundAny;
+}
+
+void addRecentScene(const std::string& path)
+{
+    if (path.empty()) {
+        return;
+    }
+
+    json j = loadJson();
+    json recent = j.value("recentScenes", json::array());
+    if (!recent.is_array()) {
+        recent = json::array();
+    }
+
+    // Rebuild with `path` first, dropping any existing duplicate, capped.
+    json updated = json::array();
+    updated.push_back(path);
+    for (const auto& entry : recent) {
+        if (updated.size() >= kMaxRecentScenes) {
+            break;
+        }
+        if (entry.is_string() && entry.get<std::string>() != path) {
+            updated.push_back(entry);
+        }
+    }
+
+    j["recentScenes"] = updated;
+    saveJson(j);
+}
+
 void setSettingsPath(const std::string& path)
 {
     gSettingsPath = path;

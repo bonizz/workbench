@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Application;
 class MetalRenderer;
@@ -39,7 +40,18 @@ public:
 private:
     void drawMainMenuBar(Scene& scene);
     void markSceneDirty();
+    // Queues the Save As modal to open and prefills the filename field from the
+    // scene's current name (or "untitled"). The popup itself is opened and drawn
+    // from the top-level drawUI path, never from inside a menu block.
+    void requestSaveAs(Scene& scene);
+    void drawSaveAsModal(Scene& scene);
+    // Queues the Open modal to open and refreshes the scene list from disk. As
+    // with Save As, the popup is opened and drawn from the top-level drawUI
+    // path, never from inside a menu block.
+    void requestOpen();
+    void drawOpenModal();
     void drawHierarchy(Scene& scene, float fps, float frameTimeMs);
+    void drawHierarchyToolbar(Scene& scene);
     void drawHierarchyNode(Scene& scene, GameObject* obj);
     void drawInspector();
     void drawDiagnostics(uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount, Scene& scene);
@@ -76,6 +88,13 @@ private:
     LightSettings* lightSettings_ = nullptr;
     SkySettings* skySettings_ = nullptr;
     char nameBuffer_[128] = {};
+    bool saveAsPending_ = false;
+    char saveAsBuffer_[256] = {};
+    std::string saveAsError_;
+    bool openPending_ = false;
+    std::vector<std::string> openScenes_;
+    int openSelected_ = -1;
+    std::string openError_;
     char commandBuffer_[256] = {};
     std::string consoleOutput_;
     char scriptBuffer_[128] = {};

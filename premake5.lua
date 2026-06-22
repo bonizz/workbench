@@ -150,6 +150,8 @@ project "tests"
         "src/engine/scene/rotate_component.h",
         "src/engine/scene/scene.cpp",
         "src/engine/scene/scene.h",
+        "src/engine/scene/scene_io.cpp",
+        "src/engine/scene/scene_io.h",
         "src/engine/scene/scene_serializer.cpp",
         "src/engine/scene/scene_serializer.h",
         "src/engine/scene/transform.cpp",
