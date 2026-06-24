@@ -108,6 +108,22 @@ Mat4 perspective(float fovY, float aspect, float nearZ, float farZ)
     };
 }
 
+Mat4 orthographic(float left, float right, float bottom, float top, float nearZ, float farZ)
+{
+    // Reversed-Z: a view-space point at -nearZ maps to NDC z = 1.0 and one at
+    // -farZ maps to 0.0, consistent with perspective() and the Greater depth
+    // compare. ndc.z = (z + farZ) / (farZ - nearZ), w stays 1 (no divide).
+    float rl = right - left;
+    float tb = top - bottom;
+    float fn = farZ - nearZ;
+    return Mat4{
+        simd::float4{2.0f / rl, 0, 0, 0},
+        simd::float4{0, 2.0f / tb, 0, 0},
+        simd::float4{0, 0, 1.0f / fn, 0},
+        simd::float4{-(right + left) / rl, -(top + bottom) / tb, farZ / fn, 1}
+    };
+}
+
 Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up)
 {
     Vec3 f = normalize({eye.x - center.x, eye.y - center.y, eye.z - center.z});

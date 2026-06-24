@@ -13,6 +13,11 @@
 #include <utility>
 #include <vector>
 
+// Fixed shadow-map resolution for v1. Independent of the window size, so it is
+// allocated once in the constructor rather than in resize().
+static constexpr NSUInteger kShadowMapSize = 1024;
+static constexpr float kShadowBias = 0.0015f;
+
 struct MetalRenderer::Impl
 {
     CAMetalLayer* layer = nil;
@@ -21,10 +26,14 @@ struct MetalRenderer::Impl
     id<MTLRenderPipelineState> meshPipeline = nil;
     id<MTLRenderPipelineState> gridPipeline = nil;
     id<MTLRenderPipelineState> skyPipeline = nil;
+    id<MTLRenderPipelineState> shadowPipeline = nil;
+    id<MTLRenderPipelineState> shadowDebugPipeline = nil;
     id<MTLDepthStencilState> depthStencilState = nil;
     id<MTLDepthStencilState> skyDepthState = nil;
     id<MTLTexture> sceneColorTexture = nil;
     id<MTLTexture> depthTexture = nil;
+    id<MTLTexture> shadowMapTexture = nil;
+    id<MTLTexture> shadowDebugTexture = nil;
     id<MTLBuffer> groundVertexBuffer = nil;
     id<MTLBuffer> groundIndexBuffer = nil;
     id<MTLBuffer> cubeVertexBuffer = nil;
@@ -75,8 +84,11 @@ static id<MTLRenderPipelineState> loadPipeline(id<MTLDevice> device,
     }
 
     id<MTLFunction> vert = [library newFunctionWithName:[NSString stringWithUTF8String:vertexFunction]];
-    id<MTLFunction> frag = [library newFunctionWithName:[NSString stringWithUTF8String:fragmentFunction]];
-    if (!vert || !frag) {
+    // A null fragmentFunction is valid for a depth-only pass (the shadow map).
+    id<MTLFunction> frag = fragmentFunction
+        ? [library newFunctionWithName:[NSString stringWithUTF8String:fragmentFunction]]
+        : nil;
+    if (!vert || (fragmentFunction && !frag)) {
         NSLog(@"Missing shader function in %s", shaderPath);
         [vert release];
         [frag release];
@@ -88,7 +100,9 @@ static id<MTLRenderPipelineState> loadPipeline(id<MTLDevice> device,
     desc.vertexFunction = vert;
     desc.fragmentFunction = frag;
     desc.rasterSampleCount = 1;
-    desc.colorAttachments[0].pixelFormat = colorFormat;
+    if (colorFormat != MTLPixelFormatInvalid) {
+        desc.colorAttachments[0].pixelFormat = colorFormat;
+    }
     if (blend) {
         desc.colorAttachments[0].blendingEnabled = YES;
         desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
@@ -154,6 +168,41 @@ MetalRenderer::MetalRenderer(void* nativeMetalLayer)
                                       MTLPixelFormatDepth32Float,
                                       false);
 
+    // Depth-only shadow pass: no color attachment, no fragment function.
+    impl_->shadowPipeline = loadPipeline(impl_->device,
+                                         "assets/shaders/shadow.metal",
+                                         "shadow_vertex",
+                                         nullptr,
+                                         MTLPixelFormatInvalid,
+                                         MTLPixelFormatDepth32Float,
+                                         false);
+
+    // Debug copy: shadow depth -> grayscale color for ImGui display.
+    impl_->shadowDebugPipeline = loadPipeline(impl_->device,
+                                              "assets/shaders/shadow_debug.metal",
+                                              "shadow_debug_vertex",
+                                              "shadow_debug_fragment",
+                                              MTLPixelFormatBGRA8Unorm,
+                                              MTLPixelFormatInvalid,
+                                              false);
+
+    // Shadow map (depth) and its debug color copy. Fixed size, allocated once.
+    MTLTextureDescriptor* shadowDesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                                                          width:kShadowMapSize
+                                                                                         height:kShadowMapSize
+                                                                                      mipmapped:NO];
+    shadowDesc.storageMode = MTLStorageModePrivate;
+    shadowDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    impl_->shadowMapTexture = [impl_->device newTextureWithDescriptor:shadowDesc];
+
+    MTLTextureDescriptor* shadowDebugDesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                                                                               width:kShadowMapSize
+                                                                                              height:kShadowMapSize
+                                                                                           mipmapped:NO];
+    shadowDebugDesc.storageMode = MTLStorageModePrivate;
+    shadowDebugDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    impl_->shadowDebugTexture = [impl_->device newTextureWithDescriptor:shadowDebugDesc];
+
     MTLDepthStencilDescriptor* depthDesc = [[MTLDepthStencilDescriptor alloc] init];
     depthDesc.depthCompareFunction = MTLCompareFunctionGreater;
     depthDesc.depthWriteEnabled = YES;
@@ -177,11 +226,15 @@ MetalRenderer::~MetalRenderer()
     [impl_->groundVertexBuffer release];
     [impl_->sceneColorTexture release];
     [impl_->depthTexture release];
+    [impl_->shadowMapTexture release];
+    [impl_->shadowDebugTexture release];
     [impl_->depthStencilState release];
     [impl_->skyDepthState release];
     [impl_->gridPipeline release];
     [impl_->meshPipeline release];
     [impl_->skyPipeline release];
+    [impl_->shadowPipeline release];
+    [impl_->shadowDebugPipeline release];
     [impl_->commandQueue release];
     [impl_->device release];
     [impl_->layer release];
@@ -223,6 +276,11 @@ float MetalRenderer::aspectRatio() const
 void* MetalRenderer::device() const
 {
     return (void*)impl_->device;
+}
+
+void* MetalRenderer::shadowMapTexture() const
+{
+    return (void*)impl_->shadowDebugTexture;
 }
 
 void MetalRenderer::requestScreenshot(const std::string& path)
@@ -286,6 +344,55 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
     }
 
     id<MTLCommandBuffer> commandBuffer = [impl_->commandQueue commandBuffer];
+
+    // Per-frame shadow data shared by the mesh and grid fragment shaders.
+    ShadowData shadowData;
+    shadowData.lightViewProjection = rc.lightViewProjection();
+    shadowData.bias = kShadowBias;
+    shadowData.enabled = rc.shadowsEnabled() ? 1.0f : 0.0f;
+
+    // Shadow depth pass: render occluder meshes from the light's point of view
+    // into the depth-only shadow map. Reuses the reversed-Z depth state (clear
+    // 0.0 = far, compare Greater). Runs before the scene pass; Metal resolves
+    // the render-target -> shader-read hazard between encoders automatically.
+    if (impl_->shadowPipeline && impl_->shadowMapTexture) {
+        MTLRenderPassDescriptor* shadowPass = [MTLRenderPassDescriptor renderPassDescriptor];
+        shadowPass.depthAttachment.texture = impl_->shadowMapTexture;
+        shadowPass.depthAttachment.loadAction = MTLLoadActionClear;
+        shadowPass.depthAttachment.storeAction = MTLStoreActionStore;
+        shadowPass.depthAttachment.clearDepth = 0.0;
+
+        id<MTLRenderCommandEncoder> shadowEncoder = [commandBuffer renderCommandEncoderWithDescriptor:shadowPass];
+        [shadowEncoder setDepthStencilState:impl_->depthStencilState];
+        [shadowEncoder setRenderPipelineState:impl_->shadowPipeline];
+
+        for (const auto& cmd : rc.commands()) {
+            id<MTLBuffer> vbuf = nil;
+            id<MTLBuffer> ibuf = nil;
+            NSUInteger indexCount = 0;
+            switch (cmd.type) {
+                case ShapeType::Cube:
+                    vbuf = impl_->cubeVertexBuffer; ibuf = impl_->cubeIndexBuffer; indexCount = impl_->cubeIndexCount; break;
+                case ShapeType::Sphere:
+                    vbuf = impl_->sphereVertexBuffer; ibuf = impl_->sphereIndexBuffer; indexCount = impl_->sphereIndexCount; break;
+                case ShapeType::Plane:
+                    vbuf = impl_->planeVertexBuffer; ibuf = impl_->planeIndexBuffer; indexCount = impl_->planeIndexCount; break;
+                default:
+                    break; // Ground and other shapes do not cast shadows.
+            }
+            if (!vbuf || !ibuf) continue;
+            [shadowEncoder setVertexBuffer:vbuf offset:0
+                atIndex:static_cast<NSUInteger>(VertexBufferIndex::Vertices)];
+            ShadowVertexUniforms su = {cmd.transform, rc.lightViewProjection()};
+            [shadowEncoder setVertexBytes:&su length:sizeof(su)
+                atIndex:static_cast<NSUInteger>(VertexBufferIndex::Uniforms)];
+            [shadowEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                indexCount:indexCount indexType:MTLIndexTypeUInt16
+                indexBuffer:ibuf indexBufferOffset:0];
+        }
+
+        [shadowEncoder endEncoding];
+    }
 
     // Scene pass: render 3D content to offscreen color + depth.
     MTLRenderPassDescriptor* scenePass = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -369,6 +476,10 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
                     atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Color)];
                 [sceneEncoder setFragmentBytes:&rc.light() length:sizeof(rc.light())
                     atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Light)];
+                [sceneEncoder setFragmentBytes:&shadowData length:sizeof(shadowData)
+                    atIndex:static_cast<NSUInteger>(MeshFragmentBufferIndex::Shadow)];
+                [sceneEncoder setFragmentTexture:impl_->shadowMapTexture
+                    atIndex:static_cast<NSUInteger>(FragmentTextureIndex::ShadowMap)];
                 [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                     indexCount:indexCount indexType:MTLIndexTypeUInt16
                     indexBuffer:ibuf indexBufferOffset:0];
@@ -389,6 +500,10 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
                 simd::float3 camSimd = {cmd.cameraPos[0], cmd.cameraPos[1], cmd.cameraPos[2]};
                 [sceneEncoder setFragmentBytes:&camSimd length:sizeof(camSimd)
                     atIndex:static_cast<NSUInteger>(FragmentBufferIndex::CameraPos)];
+                [sceneEncoder setFragmentBytes:&shadowData length:sizeof(shadowData)
+                    atIndex:static_cast<NSUInteger>(FragmentBufferIndex::Shadow)];
+                [sceneEncoder setFragmentTexture:impl_->shadowMapTexture
+                    atIndex:static_cast<NSUInteger>(FragmentTextureIndex::ShadowMap)];
                 [sceneEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                     indexCount:6 indexType:MTLIndexTypeUInt16
                     indexBuffer:impl_->groundIndexBuffer indexBufferOffset:0];
@@ -398,6 +513,22 @@ void MetalRenderer::draw(const RenderContext& rc, const float clearColor[4], con
     }
 
     [sceneEncoder endEncoding];
+
+    // Shadow-map debug copy: render the depth map as grayscale into a color
+    // texture so the editor can display it with ImGui::Image.
+    if (impl_->shadowDebugPipeline && impl_->shadowDebugTexture && impl_->shadowMapTexture) {
+        MTLRenderPassDescriptor* debugPass = [MTLRenderPassDescriptor renderPassDescriptor];
+        debugPass.colorAttachments[0].texture = impl_->shadowDebugTexture;
+        debugPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+        debugPass.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+        id<MTLRenderCommandEncoder> debugEncoder = [commandBuffer renderCommandEncoderWithDescriptor:debugPass];
+        [debugEncoder setRenderPipelineState:impl_->shadowDebugPipeline];
+        [debugEncoder setFragmentTexture:impl_->shadowMapTexture
+            atIndex:static_cast<NSUInteger>(FragmentTextureIndex::ShadowMap)];
+        [debugEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        [debugEncoder endEncoding];
+    }
 
     // Blit offscreen scene color to the window drawable.
     id<MTLBlitCommandEncoder> blitEncoder = [commandBuffer blitCommandEncoder];

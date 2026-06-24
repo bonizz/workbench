@@ -142,6 +142,9 @@ void Editor::drawUI(Scene& scene, uint64_t frame, float fps, float frameTimeMs, 
     if (showReproBundle_) {
         drawReproBundlePanel(scene, frame, fps, frameTimeMs, renderCommandCount);
     }
+    if (showShadowMap_) {
+        drawShadowMapPanel();
+    }
 }
 
 void Editor::markSceneDirty()
@@ -468,6 +471,7 @@ void Editor::drawMainMenuBar(Scene& scene)
             {"Script Runner", &showScriptRunner_},
             {"Screenshot", &showScreenshot_},
             {"Repro Bundle", &showReproBundle_},
+            {"Shadow Map", &showShadowMap_},
         };
 
         for (const auto& toggle : toggles) {
@@ -851,6 +855,25 @@ void Editor::drawLightingPanel(Scene& scene)
     ImGui::End();
 }
 
+void Editor::drawShadowMapPanel()
+{
+    ImGui::SetNextWindowPos(ImVec2(650, 320), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(300, 340), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Shadow Map", &showShadowMap_);
+
+    void* tex = renderer_ ? renderer_->shadowMapTexture() : nullptr;
+    if (tex) {
+        ImGui::TextUnformatted("Directional-light depth (reversed-Z:");
+        ImGui::TextUnformatted("brighter = closer to the light)");
+        float side = ImGui::GetContentRegionAvail().x;
+        ImGui::Image((ImTextureID)tex, ImVec2(side, side));
+    } else {
+        ImGui::TextUnformatted("Shadow map unavailable.");
+    }
+
+    ImGui::End();
+}
+
 void Editor::drawAgentConsole(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount)
 {
     ImGui::SetNextWindowPos(ImVec2(280, 10), ImGuiCond_FirstUseEver);
@@ -1015,6 +1038,7 @@ void Editor::loadWindowStates()
         {"ScriptRunner", &showScriptRunner_},
         {"Screenshot", &showScreenshot_},
         {"ReproBundle", &showReproBundle_},
+        {"ShadowMap", &showShadowMap_},
     };
 
     for (const auto& mapping : mappings) {
@@ -1036,6 +1060,7 @@ void Editor::saveWindowStates()
         {"ScriptRunner", showScriptRunner_},
         {"Screenshot", showScreenshot_},
         {"ReproBundle", showReproBundle_},
+        {"ShadowMap", showShadowMap_},
     };
 
     Settings::saveEditorWindowStates(states);

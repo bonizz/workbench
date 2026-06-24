@@ -19,6 +19,12 @@ void RenderContext::setSky(const SkySettings& sky)
     sky_ = sky;
 }
 
+void RenderContext::setShadow(const Mat4& lightViewProjection, bool enabled)
+{
+    lightViewProjection_ = lightViewProjection;
+    shadowsEnabled_ = enabled;
+}
+
 void RenderContext::drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color, bool highlight)
 {
     RenderCommand cmd;

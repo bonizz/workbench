@@ -25,6 +25,28 @@ struct alignas(16) ShaderUniforms
 
 static_assert(sizeof(ShaderUniforms) == 240, "ShaderUniforms size mismatch");
 
+// Vertex uniforms for the depth-only shadow pass. Must match shadow.metal.
+struct alignas(16) ShadowVertexUniforms
+{
+    simd::float4x4 modelMatrix;
+    simd::float4x4 lightViewProjection;
+};
+
+static_assert(sizeof(ShadowVertexUniforms) == 128, "ShadowVertexUniforms size mismatch");
+
+// Per-frame shadow data bound to mesh and grid fragment shaders. Must match the
+// metal ShadowData struct. `enabled` is a float (0/1) so the layout is trivial.
+struct alignas(16) ShadowData
+{
+    simd::float4x4 lightViewProjection;
+    float bias = 0.0015f;
+    float enabled = 0.0f;
+    float pad0 = 0.0f;
+    float pad1 = 0.0f;
+};
+
+static_assert(sizeof(ShadowData) == 80, "ShadowData size mismatch");
+
 enum class VertexBufferIndex : uint32_t
 {
     Vertices = 0,
@@ -36,12 +58,20 @@ enum class FragmentBufferIndex : uint32_t
     GridScale = 0,
     GridMajorDiv = 1,
     CameraPos = 2,
+    Shadow = 3,
 };
 
 enum class MeshFragmentBufferIndex : uint32_t
 {
     Color = 0,
     Light = 1,
+    Shadow = 2,
+};
+
+// Fragment texture slot for the shadow map (shared by mesh and grid shaders).
+enum class FragmentTextureIndex : uint32_t
+{
+    ShadowMap = 0,
 };
 
 enum class SkyFragmentBufferIndex : uint32_t

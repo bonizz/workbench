@@ -22,6 +22,10 @@ public:
     float aspectRatio() const;
     void* device() const;
 
+    // The shadow-map debug color texture (depth copied to grayscale), suitable
+    // for display via ImGui::Image. Returns an id<MTLTexture> or nullptr.
+    void* shadowMapTexture() const;
+
     // Queues a screenshot of the next completed frame. The PNG is written
     // asynchronously from the command buffer completion handler.
     void requestScreenshot(const std::string& path);

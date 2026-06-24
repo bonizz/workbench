@@ -81,6 +81,7 @@ private:
     void drawScreenshotPanel(Scene& scene);
     void drawReproBundlePanel(Scene& scene, uint64_t frame, float fps, float frameTimeMs, size_t renderCommandCount);
     void drawLightingPanel(Scene& scene);
+    void drawShadowMapPanel();
 
     void loadWindowStates();
     void saveWindowStates();
@@ -104,6 +105,7 @@ private:
     bool showScriptRunner_ = true;
     bool showScreenshot_ = true;
     bool showReproBundle_ = true;
+    bool showShadowMap_ = false;
     GameObject* selected_ = nullptr;
     MetalRenderer* renderer_ = nullptr;
     LightSettings* lightSettings_ = nullptr;

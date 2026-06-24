@@ -26,6 +26,9 @@ Mat4 scale(float x, float y, float z);
 Mat4 multiply(const Mat4& left, const Mat4& right);
 
 Mat4 perspective(float fovY, float aspect, float nearZ, float farZ);
+// Reversed-Z orthographic projection (near -> 1.0, far -> 0.0), matching the
+// depth convention used by perspective(). For the directional-light shadow map.
+Mat4 orthographic(float left, float right, float bottom, float top, float nearZ, float farZ);
 Mat4 lookAt(const Vec3& eye, const Vec3& center, const Vec3& up);
 
 Vec3 normalize(Vec3 v);

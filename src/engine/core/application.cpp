@@ -527,6 +527,23 @@ void Application::onRender()
     Vec3 dir = {scene_->environment().light.direction.x, scene_->environment().light.direction.y, scene_->environment().light.direction.z};
     ctx.setLight(dir, scene_->environment().light.ambient, scene_->environment().light.diffuse);
     ctx.setSky(scene_->environment().sky);
+
+    // Directional-light shadow map. A fixed orthographic box centered on the
+    // world origin (no scene-AABB fitting yet). The light camera sits opposite
+    // the travel direction and looks toward the origin along +direction.
+    {
+        Vec3 ld = normalize(dir);
+        constexpr float kLightDistance = 60.0f;
+        constexpr float kHalfExtent = 30.0f;
+        Vec3 eye = {-ld.x * kLightDistance, -ld.y * kLightDistance, -ld.z * kLightDistance};
+        // Guard the degenerate case where the light is near-vertical and the
+        // default up vector would be parallel to the view direction.
+        Vec3 up = (std::abs(ld.y) > 0.999f) ? Vec3{0.0f, 0.0f, 1.0f} : Vec3{0.0f, 1.0f, 0.0f};
+        Mat4 lightView = lookAt(eye, {0.0f, 0.0f, 0.0f}, up);
+        Mat4 lightProj = orthographic(-kHalfExtent, kHalfExtent, -kHalfExtent, kHalfExtent, 1.0f, 200.0f);
+        ctx.setShadow(multiply(lightProj, lightView), /*enabled=*/true);
+    }
+
     scene_->buildRenderCommands(ctx, editor_->selected());
     lastRenderCommandCount_ = ctx.commands().size();
 

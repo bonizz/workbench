@@ -12,6 +12,9 @@ public:
     void setCamera(const Mat4& view, const Mat4& projection);
     void setLight(const Vec3& direction, float ambient, float diffuse);
     void setSky(const SkySettings& sky);
+    // Directional-light shadow map: the combined light view-projection used to
+    // render and sample the shadow map. enabled=false leaves geometry unshadowed.
+    void setShadow(const Mat4& lightViewProjection, bool enabled);
 
     void drawShape(ShapeType shape, const Mat4& transform, const simd::float4& color, bool highlight = false);
     void drawGround(const Vec3& cameraPos, float gridScale = 1.0f, float gridMajorDiv = 10.0f);
@@ -21,6 +24,8 @@ public:
     const LightSettings& light() const { return light_; }
     const SkySettings& sky() const { return sky_; }
     const std::vector<RenderCommand>& commands() const { return commands_; }
+    const Mat4& lightViewProjection() const { return lightViewProjection_; }
+    bool shadowsEnabled() const { return shadowsEnabled_; }
 
 private:
     Mat4 view_ = simd::float4x4(1.0f);
@@ -28,4 +33,6 @@ private:
     LightSettings light_;
     SkySettings sky_;
     std::vector<RenderCommand> commands_;
+    Mat4 lightViewProjection_ = simd::float4x4(1.0f);
+    bool shadowsEnabled_ = false;
 };
