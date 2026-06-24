@@ -537,10 +537,10 @@ void Application::onRender()
 
 void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier, bool shiftModifier)
 {
-    if (ImGui::GetIO().WantCaptureKeyboard) {
-        return;
-    }
-
+    // App-level Command/Ctrl shortcuts run even when an ImGui window holds
+    // keyboard focus (e.g. just after editing a transform field). The platform
+    // key monitor already withholds these while a text field is actively
+    // capturing input, so they never clobber in-field text editing.
     if (shortcutModifier && down) {
         switch (keyCode) {
             case 's': case 'S': saveScene(); return;
@@ -554,6 +554,11 @@ void Application::onKeyEvent(int keyCode, bool down, bool shortcutModifier, bool
                 return;
             default: break;
         }
+    }
+
+    // Camera/game keys (WASD/QE) are suppressed while ImGui wants the keyboard.
+    if (ImGui::GetIO().WantCaptureKeyboard) {
+        return;
     }
 
     switch (keyCode) {
@@ -656,8 +661,12 @@ void Application::onMouseButton(int button, bool down, float x, float y)
             float hitRadiusPx = gizmoHitRadiusPx(center, kGizmoHandleRadius,
                                                  cam.transform().position,
                                                  60.0f * kDegToRad, height);
+            // projectToScreen returns window coords with origin top-left (Y down),
+            // but the incoming mouse y is bottom-left (Y up), so flip it before
+            // comparing. (rayFromPixel above wants the unflipped Y-up value.)
+            float mouseYDown = height - y;
             float dxPx = x - handleSx;
-            float dyPx = y - handleSy;
+            float dyPx = mouseYDown - handleSy;
             if (dxPx * dxPx + dyPx * dyPx <= hitRadiusPx * hitRadiusPx) {
                 Vec3 planeHit;
                 if (intersectRayHorizontalPlane(ray.origin, ray.direction, center.y, planeHit)) {

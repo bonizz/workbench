@@ -45,12 +45,20 @@
             BOOL imguiWantsKb = ImGui::GetIO().WantCaptureKeyboard;
 
             NSString* chars = [event charactersIgnoringModifiers];
-            if ([chars length] > 0 && !imguiWantsKb) {
+            if ([chars length] > 0) {
                 unichar c = [chars characterAtIndex:0];
                 bool shortcut = (event.modifierFlags & NSEventModifierFlagCommand) != 0;
                 bool shift = (event.modifierFlags & NSEventModifierFlagShift) != 0;
-                if (Window* w = weakSelf.workbenchWindow) {
-                    w->application().onKeyEvent(static_cast<int>(c), isDown, shortcut, shift);
+                // Command shortcuts (undo/redo/save/new) reach the app even when
+                // an ImGui window holds keyboard focus (e.g. right after editing
+                // a transform field). Only an active text field swallows them, so
+                // in-field editing keeps its own undo. Non-shortcut keys (camera
+                // WASD) stay gated on ImGui's keyboard capture.
+                bool allow = shortcut ? !ImGui::GetIO().WantTextInput : !imguiWantsKb;
+                if (allow) {
+                    if (Window* w = weakSelf.workbenchWindow) {
+                        w->application().onKeyEvent(static_cast<int>(c), isDown, shortcut, shift);
+                    }
                 }
             }
             return event;
