@@ -715,9 +715,14 @@ void Application::onLeftMouseMove(float x, float y)
         }
     }
 
-    // Update X/Z only; Y is preserved by planeDragPosition. Edits the local
-    // position (matches the inspector); for an unparented object local == world.
-    gizmoDragTarget_->transform().position =
-        planeDragPosition(hit, gizmoDragOffset_, gizmoDragPlaneY_);
+    // Update X/Z only; Y is preserved by planeDragPosition. The drag math runs
+    // in world space, but transform.position is LOCAL, so for a parented object
+    // convert the world target through the parent's inverse world matrix. For a
+    // root object local == world, so this is a no-op.
+    Vec3 targetPos = planeDragPosition(hit, gizmoDragOffset_, gizmoDragPlaneY_);
+    if (GameObject* parent = gizmoDragTarget_->parent()) {
+        targetPos = transformPoint(inverseMatrix(parent->transform().worldMatrix()), targetPos);
+    }
+    gizmoDragTarget_->transform().position = targetPos;
     markSceneDirty();
 }
